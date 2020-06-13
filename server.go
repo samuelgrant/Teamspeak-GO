@@ -6,21 +6,17 @@ import (
 	"strings"
 )
 
-/**
-
-
-TS3Client.Server.Disconnect()
-
-
-TS3Client.Server.Info(sid) - Return { online int, started_at time, name string, version string, avaliable_slots, port int}
-
-
-// TS3Client.Server.Use(sid)
-// TS3Client.Server.GlobalMessage(message)
-// TS3Client.Server.Start(sid)
-// TS3Client.Server.Stop(sid)
-// TS3Client.Server.List()
-*/
+type VirtualServer struct {
+	Id                 int64
+	Port               int64
+	Status             string
+	ClientsOnline      int64
+	QueryClientsOnline int64
+	MaxClients         int64
+	Uptime             int64
+	Name               string
+	Autostart          bool
+}
 
 // Select a virtual server to manage
 func (this *Conn) Use(sid int) (QueryResponse, error) {
@@ -81,16 +77,4 @@ func (this *Conn) List() ([]VirtualServer, error) {
 	}
 
 	return ServerList, nil
-}
-
-type VirtualServer struct {
-	Id                 int64
-	Port               int64
-	Status             string
-	ClientsOnline      int64
-	QueryClientsOnline int64
-	MaxClients         int64
-	Uptime             int64
-	Name               string
-	Autostart          bool
 }

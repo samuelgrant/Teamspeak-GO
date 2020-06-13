@@ -39,6 +39,12 @@ var (
 	)
 )
 
+type QueryResponse struct {
+	Id      int64
+	Msg     string
+	Success bool
+}
+
 // Decode and return the string
 func Decode(s string) string {
 	return decoder.Replace(s)
@@ -46,12 +52,6 @@ func Decode(s string) string {
 
 func Encode(s string) string {
 	return encoder.Replace(s)
-}
-
-type QueryResponse struct {
-	Id      int64
-	Msg     string
-	Success bool
 }
 
 // Parse a Teamspeak Server Query response

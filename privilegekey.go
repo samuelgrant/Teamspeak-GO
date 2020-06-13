@@ -6,6 +6,15 @@ import (
 	"strings"
 )
 
+type PrivilegeKey struct {
+	ChannelId    int64
+	Description  string
+	GroupId      int64
+	Token        string
+	Type         string
+	CustomFields map[string]string
+}
+
 // Create a privilege key. The groupId is a server group id.
 // CustomFields can be used to create unique IDs for a user. You can search for users by these IDs later
 func (this *Conn) TokensAdd(groupId int, description string, customFields map[string]string) (QueryResponse, PrivilegeKey, error) {
@@ -73,15 +82,6 @@ func (this *Conn) Tokenslist() (QueryResponse, []PrivilegeKey, error) { //[]toke
 	}
 
 	return ParseQueryResponse(strings.Split(res, "\n")[1]), Tokens, nil
-}
-
-type PrivilegeKey struct {
-	ChannelId    int64
-	Description  string
-	GroupId      int64
-	Token        string
-	Type         string
-	CustomFields map[string]string
 }
 
 func ParsePrivilegeKey(s string) (PrivilegeKey, error) {

@@ -23,7 +23,7 @@ type Conn struct {
 }
 
 // Attempt to authenticate with the server
-func (this *Conn) Authenticate(user string, passwd string) error {
+func (this *Conn) Login(user string, passwd string) error {
 	_, err := this.Exec("login %v %v", Encode(user), Encode(passwd))
 	return err
 }
