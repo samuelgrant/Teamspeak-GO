@@ -62,12 +62,12 @@ func (this *Conn) TokensDelete(token string) (QueryResponse, error) {
 	return ParseQueryResponse(res), nil
 }
 
-// https://lethallhost.com.br/clientes/TeamSpeak%203%20Server%20Query%20Manual.pdf#page=32&zoom=100,72,306
+// List active PrivilegeKeys
 func (this *Conn) Tokenslist() (QueryResponse, []PrivilegeKey, error) { //[]tokens  as well
 	var Tokens []PrivilegeKey
 
 	res, err := this.Exec("privilegekeylist")
-	if err != nil {
+	if err != nil || len(strings.Split(res, "\n")) <= 2 {
 		return QueryResponse{}, Tokens, err
 	}
 
@@ -126,8 +126,13 @@ func ParsePrivilegeKey(s string) (PrivilegeKey, error) {
 func parseCustomSets(s string) map[string]string {
 	CustomSets := make(map[string]string)
 
-	s = strings.ReplaceAll(s, "token_customset=", "")
+	s = strings.ReplaceAll(s, "token_customset", "")
+
 	parts := strings.Split(s, "\\p")
+	if len(parts) == 1 || parts[0] == "" {
+		return CustomSets
+	}
+
 	for i := 0; i < len(parts); i++ {
 		p := strings.Split(parts[i], "\\s")
 
