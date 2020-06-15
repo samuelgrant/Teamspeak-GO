@@ -40,9 +40,9 @@ var (
 )
 
 type QueryResponse struct {
-	Id      int64
-	Msg     string
-	Success bool
+	Id        int64
+	Msg       string
+	IsSuccess bool
 }
 
 // Decode and return the string
@@ -54,88 +54,28 @@ func Encode(s string) string {
 	return encoder.Replace(s)
 }
 
-// Parse a Teamspeak Server Query response
-func ParseQueryResponse(s string) QueryResponse {
-
-	parts := strings.Split(strings.TrimSpace(s), " ")
-
-	Id, err := strconv.ParseInt(strings.Split(parts[1], "=")[1], 10, 64)
-	if err != nil {
-		Id = -1
-	}
-
-	message := strings.Split(parts[2], "=")[1]
-
-	return QueryResponse{
-		Id:      Id,
-		Msg:     Decode(message),
-		Success: message == "ok",
-	}
-}
-
-// Parse a string into a Teamspeak Virtual Server object
-func ParseVirtualServer(s string) (VirtualServer, error) {
-
-	parts := strings.Split(strings.TrimSpace(s), " ")
-	server := VirtualServer{}
-
-	// Get the Virtual Server ID
-	Id, err := strconv.ParseInt(strings.Split(parts[0], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.Id = Id
-
-	// Get the virtual server portnumber
-	Port, err := strconv.ParseInt(strings.Split(parts[1], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.Port = Port
-
-	// Get the server status "online" || "offline"
-	server.Status = strings.Split(parts[2], "=")[1]
-	if server.Status == "offline" {
-		server.Name = strings.Split(parts[3], "=")[1]
-		server.Autostart = strings.Split(parts[4], "=")[1] == "1"
-
-		return server, nil
-	}
-
-	// Get the number of clients online
-	ClientsOnline, err := strconv.ParseInt(strings.Split(parts[3], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.ClientsOnline = ClientsOnline
-
-	// Get the number of 'Query' clients online
-	QueryClientsOnline, err := strconv.ParseInt(strings.Split(parts[4], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.QueryClientsOnline = QueryClientsOnline
-
-	// Get the number of 'Client Slots' avaliable on the virtual server
-	MaxClients, err := strconv.ParseInt(strings.Split(parts[5], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.MaxClients = MaxClients
-
-	// Get the server uptime
-	Uptime, err := strconv.ParseInt(strings.Split(parts[6], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.Uptime = Uptime
-
-	server.Name = strings.Split(parts[7], "=")[1]
-	server.Autostart = strings.Split(parts[4], "=")[1] == "8"
-
-	return server, nil
-}
-
 func GetVal(s string) string {
 	return strings.Split(s, "=")[1]
+}
+
+func ParseQueryResponse(res string) (*QueryResponse, string, error) {
+	lines := strings.Split(res, "\n")
+
+	qr_lines := strings.Split(lines[len(lines)-2], " ")
+	qr_res_id, err := strconv.ParseInt(GetVal(qr_lines[1]), 10, 64)
+	if err != nil {
+		return nil, "", err
+	}
+
+	qr_obj := QueryResponse{
+		Id:        qr_res_id,
+		Msg:       Decode(GetVal(qr_lines[2])),
+		IsSuccess: GetVal(qr_lines[2]) == "ok",
+	}
+
+	if len(lines) <= 2 {
+		return &qr_obj, "", nil
+	}
+
+	return &qr_obj, lines[0], nil
 }

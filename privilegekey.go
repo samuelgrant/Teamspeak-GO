@@ -17,9 +17,10 @@ type PrivilegeKey struct {
 
 // Create a privilege key. The groupId is a server group id.
 // CustomFields can be used to create unique IDs for a user. You can search for users by these IDs later
-func (this *Conn) TokensAdd(groupId int, description string, customFields map[string]string) (QueryResponse, PrivilegeKey, error) {
+func (this *Conn) TokensAdd(groupId int, description string, customFields map[string]string) (*QueryResponse, *PrivilegeKey, error) {
 	s := fmt.Sprintf("tokenadd tokentype=0 tokenid1=%v tokenid2=0 tokendescription=%v", groupId, Encode(description))
 
+	// Build custom fields
 	if len(customFields) > 0 {
 		s = fmt.Sprintf("%v tokencustomset=", s)
 
@@ -35,55 +36,63 @@ func (this *Conn) TokensAdd(groupId int, description string, customFields map[st
 		}
 
 		s = fmt.Sprintf("%v%v", s, strings.TrimLeft(str, "\\p"))
-
 	}
 
-	res, err := this.Exec(s)
-	if err != nil {
-		return ParseQueryResponse(res), PrivilegeKey{}, nil
+	// Create token
+	res, body, err := this.Exec(s)
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to create privilege token\n%v\n%v", res, err)
+		return res, nil, err
 	}
 
-	parts := strings.Split(res, "\n")
-	token, err := ParsePrivilegeKey(parts[0])
-	if err != nil {
-		return QueryResponse{}, PrivilegeKey{}, nil
+	// build token struct
+	token := PrivilegeKey{
+		Description:  description,
+		GroupId:      int64(groupId),
+		Type:         "server",
+		Token:        body,
+		CustomFields: customFields,
 	}
-	return ParseQueryResponse(parts[1]), token, nil
+
+	return res, &token, nil
 }
 
 // Delete a privilege key from the server
-func (this *Conn) TokensDelete(token string) (QueryResponse, error) {
-
-	res, err := this.Exec("privilegekeydelete token=%v", token)
-	if err != nil {
-		return ParseQueryResponse(res), err
+func (this *Conn) TokensDelete(token string) (*QueryResponse, error) {
+	res, _, err := this.Exec("privilegekeydelete token=%v", token)
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to delete privilege token %v\n%v\n%v", token, res, err)
+		return res, err
 	}
 
-	return ParseQueryResponse(res), nil
+	return res, nil
 }
 
-// List active PrivilegeKeys
-func (this *Conn) Tokenslist() (QueryResponse, []PrivilegeKey, error) { //[]tokens  as well
+// List active privilege keys, include their custom field sets
+func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) { //[]tokens  as well
 	var Tokens []PrivilegeKey
 
-	res, err := this.Exec("privilegekeylist")
-	if err != nil || len(strings.Split(res, "\n")) <= 2 {
-		return QueryResponse{}, Tokens, err
+	res, body, err := this.Exec("privilegekeylist")
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to get privilege keys\n%v\n%v", res, err)
+		return res, nil, err
 	}
 
-	keys := strings.Split(strings.Split(res, "\n")[0], "|")
+	keys := strings.Split(body, "|")
 	for i := 0; i < len(keys); i++ {
 		token, err := ParsePrivilegeKey(keys[i])
 		if err != nil {
-			return ParseQueryResponse(strings.Split(res, "\n")[1]), nil, err
+			Log(Error, "Failed to parse privilege keys\n%v\n%v", res, err)
+			return res, nil, err
 		}
 
 		Tokens = append(Tokens, token)
 	}
 
-	return ParseQueryResponse(strings.Split(res, "\n")[1]), Tokens, nil
+	return res, &Tokens, nil
 }
 
+// Build a privilege key struct from a string
 func ParsePrivilegeKey(s string) (PrivilegeKey, error) {
 	parts := strings.Split(s, " ")
 	token := PrivilegeKey{}
@@ -123,6 +132,7 @@ func ParsePrivilegeKey(s string) (PrivilegeKey, error) {
 	return token, nil
 }
 
+// Build a map of custom sets for the token from a string
 func parseCustomSets(s string) map[string]string {
 	CustomSets := make(map[string]string)
 
@@ -135,7 +145,6 @@ func parseCustomSets(s string) map[string]string {
 
 	for i := 0; i < len(parts); i++ {
 		p := strings.Split(parts[i], "\\s")
-
 		CustomSets[strings.ReplaceAll(GetVal(p[0]), "_", " ")] = strings.ReplaceAll(GetVal(p[1]), "_", " ")
 	}
 
