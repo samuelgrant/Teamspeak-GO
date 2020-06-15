@@ -129,7 +129,7 @@ func (TSClient *Conn) ServerGroupPoke(sgid int, msg string) error {
 	// Encode the message once for all pokes
 	msg = Encode(msg)
 	// Get a list of users who belong to the specified GID (group)
-	users, err := TSClient.ServerGroupMembers(gid)
+	users, err := TSClient.ServerGroupMembers(sgid)
 	if err != nil {
 		return err
 	}

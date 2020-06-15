@@ -1,5 +1,5 @@
 # Boom Alliance TS3 API
-A simple TS3 Server Query Client for BOOM Alliance.
+A simple TS3 Server Query Client.
 
 ## Planned Commands
 The following functions are planned
