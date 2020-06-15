@@ -16,6 +16,5 @@ The following functions are planned
 * TS3Client.User.RevokeBan(uid)
 
 ### Permissions
-* TS3Client.Groups.List(type) - Type Server || Channel
-* TS3Client.Groups.Members(type, roleid) - Type Server || Channel
-* TS3Client.Groups.Poke(type, roleid, message) - Type Server || Channel
+* TS3Client.ChannelGroups - List all channel groups
+* TS3Client.ChannelGroupsPoke(cid, cgid, msg) - poke the members of a specific channel group
