@@ -1,4 +1,4 @@
-package main
+package ts3
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ const (
 )
 
 var (
-	DialTimeout = 1 * time.Second
+	DialTimeout = 20 * time.Second
 )
 
 type Conn struct {
@@ -50,7 +50,7 @@ func Connect(address string) (*Conn, error) {
 	// Throw away this response
 	conn.Read(make([]byte, Bytes))
 
-	Log(Notice, "Successfully established a TCP connection to %v", conn.RemoteAddr().String)
+	Log(Notice, "Successfully established a TCP connection to %v", address)
 
 	return &Conn{
 		conn: conn,
@@ -94,7 +94,7 @@ func (this *Conn) Exec(format string, a ...interface{}) (*QueryResponse, string,
 	_, err := this.conn.Write([]byte(cmd))
 	if err != nil {
 		Log(Error, "Failed to send the command to the server\n  Command: %v\n  Error:%v", cmd, err)
-		return nil, "", nil
+		return nil, "", err
 	}
 
 	// Get the response from the server

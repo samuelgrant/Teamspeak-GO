@@ -1,4 +1,4 @@
-package main
+package ts3
 
 import (
 	"fmt"

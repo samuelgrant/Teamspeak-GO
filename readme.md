@@ -1,5 +1,5 @@
-# Boom Alliance TS3 API
-A simple TS3 Server Query Client.
+# A simple TS3 Server Query API in GO
+Written for the Eve Online alliance Boom & because I felt like learning GO...
 
 ## Planned Commands
 The following functions are planned

@@ -1,4 +1,4 @@
-package main
+package ts3
 
 import (
 	"fmt"
@@ -21,15 +21,30 @@ const (
 	NoticeColour = "\033[1;36m%s\033[0m"
 )
 
+var logging bool = false
+
+// Allow you to turn logging on or off
+func LoggingEnabled(enable bool) {
+	if enable {
+		Log(Debug, "Logging enabled")
+	} else {
+		Log(Debug, "Logging disabled")
+	}
+
+	logging = enable
+}
+
 func Log(loglevel LogLevel, format string, a ...interface{}) {
-	switch loglevel {
-	case Debug:
-		log.Printf(DebugColour, fmt.Sprintf("[debug]: "+format, a...))
-	case Notice:
-		log.Printf(NoticeColour, fmt.Sprintf("[notice]: "+format, a...))
-	case Error:
-		log.Printf(ErrorColour, fmt.Sprintf("[error]: "+format, a...))
-	case CmdExc:
-		log.Printf(CmdColour, fmt.Sprintf("[executed]: "+format, a...))
+	if logging {
+		switch loglevel {
+		case Debug:
+			log.Printf(DebugColour, fmt.Sprintf("[debug]: "+format, a...))
+		case Notice:
+			log.Printf(NoticeColour, fmt.Sprintf("[notice]: "+format, a...))
+		case Error:
+			log.Printf(ErrorColour, fmt.Sprintf("[error]: "+format, a...))
+		case CmdExc:
+			log.Printf(CmdColour, fmt.Sprintf("[executed]: "+format, a...))
+		}
 	}
 }
