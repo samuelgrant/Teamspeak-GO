@@ -43,7 +43,7 @@ func Connect(address string) (*Conn, error) {
 	// Establish a connection
 	conn, err := net.DialTimeout("tcp", address, DialTimeout)
 	if err != nil {
-		Log(Error, "Failed to establish a TCP connection to the server")
+		Log(Error, "Failed to establish a TCP connection to the server \n%v", err)
 		return nil, err
 	}
 
@@ -61,7 +61,7 @@ func Connect(address string) (*Conn, error) {
 func (TSClient *Conn) Disconnect() error {
 	_, _, err := TSClient.Exec("quit")
 	if err != nil {
-		Log(Error, "Failed to disconnect from the Team Speak server @ %v", TSClient.conn.RemoteAddr().String)
+		Log(Error, "Failed to disconnect from the Team Speak server @ %v \n%v", TSClient.conn.RemoteAddr().String, err)
 	}
 
 	Log(Notice, "Closing TCP conncetion")
@@ -93,14 +93,14 @@ func (this *Conn) Exec(format string, a ...interface{}) (*QueryResponse, string,
 	// Send the request
 	_, err := this.conn.Write([]byte(cmd))
 	if err != nil {
-		Log(Error, "Failed to send the command to the server\n  Command: %v\n  Error:%v", cmd, err)
+		Log(Error, "Failed to send the command to the server\n  Command: %v \n%v", cmd, err)
 		return nil, "", err
 	}
 
 	// Get the response from the server
 	_, err = this.conn.Read(res)
 	if err != nil {
-		Log(Error, "Failed to get a response from the server\n  Res: %v\n  Error:", string(res), err)
+		Log(Error, "Failed to get a response from the server\n  Res: %v \n%v:", string(res), err)
 		return nil, "", err
 	}
 

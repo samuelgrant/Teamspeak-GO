@@ -41,7 +41,7 @@ func (this *Conn) TokensAdd(groupId int, description string, customFields map[st
 	// Create token
 	res, body, err := this.Exec(s)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to create privilege token\n%v\n%v", res, err)
+		Log(Error, "Failed to create privilege token \n%v \n%v", res, err)
 		return res, nil, err
 	}
 
@@ -61,7 +61,7 @@ func (this *Conn) TokensAdd(groupId int, description string, customFields map[st
 func (this *Conn) TokensDelete(token string) (*QueryResponse, error) {
 	res, _, err := this.Exec("privilegekeydelete token=%v", token)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to delete privilege token %v\n%v\n%v", token, res, err)
+		Log(Error, "Failed to delete privilege token %v \n%v \n%v", token, res, err)
 		return res, err
 	}
 
@@ -74,7 +74,7 @@ func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) { //[]to
 
 	res, body, err := this.Exec("privilegekeylist")
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get privilege keys\n%v\n%v", res, err)
+		Log(Error, "Failed to get privilege keys \n%v \n%v", res, err)
 		return res, nil, err
 	}
 
@@ -82,7 +82,7 @@ func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) { //[]to
 	for i := 0; i < len(keys); i++ {
 		token, err := ParsePrivilegeKey(keys[i])
 		if err != nil {
-			Log(Error, "Failed to parse privilege keys\n%v\n%v", res, err)
+			Log(Error, "Failed to parse privilege keys \n%v \n%v", res, err)
 			return res, nil, err
 		}
 

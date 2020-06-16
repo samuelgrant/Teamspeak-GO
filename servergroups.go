@@ -41,14 +41,14 @@ func (TSClient *Conn) ServerGroups() (*QueryResponse, *[]ServerGroup, error) {
 
 		id, err := strconv.ParseInt(GetVal(seg[0]), 10, 64)
 		if err != nil {
-			Log(Error, "Failed to parse the server group ID")
+			Log(Error, "Failed to parse the server group ID \n%v", err)
 			return res, nil, err
 		}
 
 		// Get the group ID so we can convert it into an Enum
 		groupTypeId, err := strconv.ParseInt(GetVal(seg[2]), 10, 64)
 		if err != nil {
-			Log(Error, "Failed to parse the group type ID")
+			Log(Error, "Failed to parse the group type ID \n%v", err)
 			return res, nil, err
 		}
 
@@ -67,7 +67,7 @@ func (TSClient *Conn) ServerGroups() (*QueryResponse, *[]ServerGroup, error) {
 func (TSClient *Conn) ServerGroupAddClient(sgid int, cldbid int) (*QueryResponse, error) {
 	res, _, err := TSClient.Exec("servergroupaddclient sgid=%v cldbid=%v", sgid, cldbid)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to add user %v to server group %v\n%v\n%v", cldbid, sgid, res, err)
+		Log(Error, "Failed to add user %v to server group %v \n%v \n%v", cldbid, sgid, res, err)
 		return res, err
 	}
 
@@ -78,7 +78,7 @@ func (TSClient *Conn) ServerGroupAddClient(sgid int, cldbid int) (*QueryResponse
 func (TSClient *Conn) ServerGroupRemoveClient(sgid int, cldbid int) (*QueryResponse, error) {
 	res, _, err := TSClient.Exec("servergroupdelclient sgid=%v cldbid=%v", sgid, cldbid)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to remove user %v from server group %v\n%v\n%v", cldbid, sgid, res, err)
+		Log(Error, "Failed to remove user %v from server group %v \n%v \n%v", cldbid, sgid, res, err)
 		return res, err
 	}
 
@@ -93,14 +93,14 @@ func (TSClient *Conn) ServerGroupMembers(gid int) (*QueryResponse, *[]User, erro
 	// This list returns a CLDBID, this isn't of huge use so we need to look up more info
 	res, body, err := TSClient.Exec(fmt.Sprintf("servergroupclientlist sgid=%v", gid))
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the server group client list\n%v\n%v", res, err)
+		Log(Error, "Failed to get the server group client list \n%v \n%v", res, err)
 		return res, nil, err
 	}
 
 	// Map of active clients using their DatabseID as the map key
 	sessions, err := TSClient.ActiveClients()
 	if err != nil {
-		Log(Error, "Failed to get the list of active clients\n%v\n%v", res, err)
+		Log(Error, "Failed to get the list of active clients \n%v \n%v", res, err)
 		return res, nil, err
 	}
 
@@ -108,14 +108,14 @@ func (TSClient *Conn) ServerGroupMembers(gid int) (*QueryResponse, *[]User, erro
 	for i := 0; i < len(parts); i++ {
 		cldbid, err := strconv.ParseInt(strings.ReplaceAll(parts[i], "cldbid=", ""), 10, 64)
 		if err != nil {
-			Log(Error, "Error parsing the CLDBID\n%v\n%v", res, err)
+			Log(Error, "Error parsing the CLDBID \n%v \n%v", res, err)
 			return res, nil, err
 		}
 
 		// Get the user information using their Client DB ID
 		user, err := TSClient.FindUserByDbId(cldbid)
 		if err != nil {
-			Log(Error, "Error finding the user by their cldbid\n%v\n%v", res, err)
+			Log(Error, "Error finding the user by their cldbid \n%v \n%v", res, err)
 			return res, nil, err
 		}
 
@@ -134,17 +134,31 @@ func (TSClient *Conn) ServerGroupPoke(sgid int, msg string) (*QueryResponse, err
 	// Get a list of users who belong to the specified GID (group)
 	res, body, err := TSClient.ServerGroupMembers(sgid)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Error getting a list of server group members\n%v\n%v", res, err)
+		Log(Error, "Error getting a list of server group members \n%v \n%v", res, err)
 		return res, err
 	}
 
-	msg = Encode(msg)
+	var successful int = 0
+	var attempted int = 0
 
 	for _, user := range *body {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			TSClient.Exec("clientpoke clid=%v msg=%v", user.ActiveSessionIds[i], msg)
+			res, err := TSClient.PokeUser(int(user.ActiveSessionIds[i]), msg)
+			if err != nil {
+				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
+			}
+
+			// Increase counters
+			attempted++
+			if res.IsSuccess {
+				successful++
+			}
 		}
 	}
 
-	return res, nil
+	return &QueryResponse{
+		Id:        -1,
+		Msg:       fmt.Sprintf("%v out of %v clients sucesffuly poked", successful, attempted),
+		IsSuccess: true,
+	}, nil
 }

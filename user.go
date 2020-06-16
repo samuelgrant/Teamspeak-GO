@@ -26,7 +26,7 @@ func (TSClient *Conn) ActiveClients() (map[int64][]int64, error) {
 
 	res, body, err := TSClient.Exec("clientlist")
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the active client list")
+		Log(Error, "Failed to get the active client list \n%v \n%v", res, err)
 		return clients, err
 	}
 
@@ -38,14 +38,14 @@ func (TSClient *Conn) ActiveClients() (map[int64][]int64, error) {
 		// Get the users client database id
 		cldbid, err := strconv.ParseInt(GetVal(parts[2]), 10, 64)
 		if err != nil {
-			Log(Error, "Failed to parse the Client Database ID\n%v\n", parts, err)
+			Log(Error, "Failed to parse the Client Database ID \n%v \n%v", parts, err)
 			return clients, err
 		}
 
 		// Get the users client id (Active session ID)
 		clid, err := strconv.ParseInt(GetVal(parts[0]), 10, 64)
 		if err != nil {
-			Log(Error, "Failed to parse the Client ID (active session ID)\n%v\n", parts, err)
+			Log(Error, "Failed to parse the Client ID (active session ID) \n%v \n%v", parts, err)
 			return clients, err
 		}
 
@@ -59,7 +59,7 @@ func (TSClient *Conn) ActiveClients() (map[int64][]int64, error) {
 func (TSClient *Conn) FindUserByDbId(cldbid int64) (*User, error) {
 	res, body, err := TSClient.Exec("clientdbinfo cldbid=%v", cldbid)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get cldbid=%v information\n%v\n%v", cldbid, res, err)
+		Log(Error, "Failed to get cldbid=%v information \n%v \n%v", cldbid, res, err)
 		return nil, err
 	}
 
@@ -85,7 +85,7 @@ func (TSClient *Conn) FindUserByCustomSearch(ident string, value string) (*Query
 		strings.ReplaceAll(value, " ", "_"),
 	)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to find user with the custom field [%v]:%v", ident, value)
+		Log(Error, "Failed to find user with the custom field [%v]:%v \n%v \n%v", ident, value, res, err)
 		return res, nil, err
 	}
 
@@ -101,9 +101,15 @@ func (TSClient *Conn) FindUserByCustomSearch(ident string, value string) (*Query
 	// Look up the user using their client database ID
 	user, err := TSClient.FindUserByDbId(cldbid)
 	if err != nil {
-		Log(Error, "Failed to look up the user %v", cldbid)
+		Log(Error, "Failed to look up the user %v \n%v", cldbid, err)
 		return res, nil, nil
 	}
 
 	return res, user, nil
+}
+
+// Poke a client with a message
+func (TSClient *Conn) PokeUser(clid int, msg string) (*QueryResponse, error) {
+	res, _, err := TSClient.Exec("clientpoke clid=%v msg=%v", clid, Encode(msg))
+	return res, err
 }

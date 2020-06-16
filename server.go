@@ -21,7 +21,7 @@ type VirtualServer struct {
 func (this *Conn) Use(sid int) (*QueryResponse, error) {
 	res, _, err := this.Exec("use %v", sid)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to select virtual server %v.\n%v\n%v", sid, res, err)
+		Log(Error, "Failed to select virtual server %v.\n%v \n%v", sid, res, err)
 		return res, err
 	}
 
@@ -32,7 +32,7 @@ func (this *Conn) Use(sid int) (*QueryResponse, error) {
 func (this *Conn) GlobalMessage(msg string) (*QueryResponse, error) {
 	res, _, err := this.Exec("gm msg=%v", Encode(msg))
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to send a global message %v.\n%v\n%v", msg, res, err)
+		Log(Error, "Failed to send a global message %v.\n%v \n%v", msg, res, err)
 		return res, err
 	}
 
@@ -43,7 +43,7 @@ func (this *Conn) GlobalMessage(msg string) (*QueryResponse, error) {
 func (this *Conn) Start(sid int) (*QueryResponse, error) {
 	res, _, err := this.Exec("serverstart sid=%v", sid)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to start virtual server %v.\n%v\n%v", sid, res, err)
+		Log(Error, "Failed to start virtual server %v.\n%v \n%v", sid, res, err)
 		return res, err
 	}
 
@@ -54,7 +54,7 @@ func (this *Conn) Start(sid int) (*QueryResponse, error) {
 func (this *Conn) Stop(sid int) (*QueryResponse, error) {
 	res, _, err := this.Exec("serverstop sid=%v", sid)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to stop virtual server %v.\n%v\n%v", sid, res, err)
+		Log(Error, "Failed to stop virtual server %v.\n%v \n%v", sid, res, err)
 		return res, err
 	}
 
@@ -67,7 +67,7 @@ func (this *Conn) List() (*QueryResponse, []VirtualServer, error) {
 
 	res, body, err := this.Exec("serverlist")
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get virtual servers from Team Speak.\n%v\n%v", res, err)
+		Log(Error, "Failed to get virtual servers from Team Speak. \n%v \n%v", res, err)
 		return res, ServerList, err
 	}
 
@@ -75,7 +75,7 @@ func (this *Conn) List() (*QueryResponse, []VirtualServer, error) {
 	for i := 0; i < len(servers); i++ {
 		server, err := ParseVirtualServer(servers[i])
 		if err != nil {
-			Log(Error, "Failed to parse server information.\n%v\n%v", res, err)
+			Log(Error, "Failed to parse server information. \n%v \n%v", res, err)
 			return res, nil, err
 		}
 
