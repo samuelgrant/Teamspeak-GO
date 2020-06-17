@@ -103,10 +103,10 @@ func (TSClient *Conn) ChannelGroupMembers(cgid int, cid int) (*QueryResponse, []
 	}
 
 	// Map of active clients using their DatabaseID as the map key
-	sessions, err := TSClient.ActiveClients()
-	if err != nil {
-		Log(Error, "Fauked to get the list of active clients \n%v \n%v", res, err)
-		return nil, nil, err
+	res, sessions, err := TSClient.ActiveClients()
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to get the list of active clients \n%v \n%v", res, err)
+		return res, nil, err
 	}
 
 	clients := strings.Split(body, "|")
@@ -121,7 +121,7 @@ func (TSClient *Conn) ChannelGroupMembers(cgid int, cid int) (*QueryResponse, []
 		}
 
 		// Find the user using their CLDBID
-		user, err := TSClient.FindUserByDbId(cldbid)
+		user, err := TSClient.UserFindByDbId(cldbid)
 		if err != nil {
 			Log(Error, "Failed to find user using the cldbid %v \n%v", cldbid, err)
 			return nil, nil, err
@@ -150,7 +150,7 @@ func (TSClient *Conn) ChannelGroupPoke(cgid int, cid int, msg string) (*QueryRes
 
 	for _, user := range body {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			res, err := TSClient.PokeUser(int(user.ActiveSessionIds[i]), msg)
+			res, err := TSClient.UserPoke(int(user.ActiveSessionIds[i]), msg)
 			if err != nil {
 				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
 			}

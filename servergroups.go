@@ -98,8 +98,8 @@ func (TSClient *Conn) ServerGroupMembers(gid int) (*QueryResponse, *[]User, erro
 	}
 
 	// Map of active clients using their DatabseID as the map key
-	sessions, err := TSClient.ActiveClients()
-	if err != nil {
+	res, sessions, err := TSClient.ActiveClients()
+	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to get the list of active clients \n%v \n%v", res, err)
 		return res, nil, err
 	}
@@ -113,7 +113,7 @@ func (TSClient *Conn) ServerGroupMembers(gid int) (*QueryResponse, *[]User, erro
 		}
 
 		// Get the user information using their Client DB ID
-		user, err := TSClient.FindUserByDbId(cldbid)
+		user, err := TSClient.UserFindByDbId(cldbid)
 		if err != nil {
 			Log(Error, "Error finding the user by their cldbid \n%v \n%v", res, err)
 			return res, nil, err
@@ -143,7 +143,7 @@ func (TSClient *Conn) ServerGroupPoke(sgid int, msg string) (*QueryResponse, err
 
 	for _, user := range *body {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			res, err := TSClient.PokeUser(int(user.ActiveSessionIds[i]), msg)
+			res, err := TSClient.UserPoke(int(user.ActiveSessionIds[i]), msg)
 			if err != nil {
 				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
 			}
