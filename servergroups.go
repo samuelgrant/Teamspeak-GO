@@ -243,7 +243,7 @@ func (TSClient *Conn) ServerGroupDel(sgid int, forceDelete bool) (*QueryResponse
 	// Attempt to delete the server group
 	res, _, err := TSClient.Exec("servergroupdel sgid=%v force=%v", sgid, force)
 	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to delete the server group %v sgod \n%v\n%v", res, err)
+		Log(Error, "Failed to delete the server group %v sgod \n%v\n%v", sgid, res, err)
 		return res, err
 	}
 
