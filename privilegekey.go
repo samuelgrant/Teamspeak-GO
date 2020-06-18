@@ -17,8 +17,8 @@ type PrivilegeKey struct {
 
 // Create a privilege key. The groupId is a server group id.
 // CustomFields can be used to create unique IDs for a user. You can search for users by these IDs later
-func (this *Conn) TokensAdd(groupId int, description string, customFields map[string]string) (*QueryResponse, *PrivilegeKey, error) {
-	s := fmt.Sprintf("tokenadd tokentype=0 tokenid1=%v tokenid2=0 tokendescription=%v", groupId, Encode(description))
+func (this *Conn) TokensAdd(sgid int, description string, customFields map[string]string) (*QueryResponse, *PrivilegeKey, error) {
+	s := fmt.Sprintf("tokenadd tokentype=0 tokenid1=%v tokenid2=0 tokendescription=%v", sgid, Encode(description))
 
 	// Build custom fields
 	if len(customFields) > 0 {
@@ -48,7 +48,7 @@ func (this *Conn) TokensAdd(groupId int, description string, customFields map[st
 	// build token struct
 	token := PrivilegeKey{
 		Description:  description,
-		GroupId:      int64(groupId),
+		GroupId:      int64(sgid),
 		Type:         "server",
 		Token:        body,
 		CustomFields: customFields,
@@ -69,7 +69,7 @@ func (this *Conn) TokensDelete(token string) (*QueryResponse, error) {
 }
 
 // List active privilege keys, include their custom field sets
-func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) { //[]tokens  as well
+func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) {
 	var Tokens []PrivilegeKey
 
 	res, body, err := this.Exec("privilegekeylist")
@@ -80,7 +80,7 @@ func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) { //[]to
 
 	keys := strings.Split(body, "|")
 	for i := 0; i < len(keys); i++ {
-		token, err := ParsePrivilegeKey(keys[i])
+		token, err := parsePrivilegeKey(keys[i])
 		if err != nil {
 			Log(Error, "Failed to parse privilege keys \n%v \n%v", res, err)
 			return res, nil, err
@@ -93,7 +93,7 @@ func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) { //[]to
 }
 
 // Build a privilege key struct from a string
-func ParsePrivilegeKey(s string) (PrivilegeKey, error) {
+func parsePrivilegeKey(s string) (PrivilegeKey, error) {
 	parts := strings.Split(s, " ")
 	token := PrivilegeKey{}
 
