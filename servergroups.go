@@ -162,3 +162,52 @@ func (TSClient *Conn) ServerGroupPoke(sgid int, msg string) (*QueryResponse, err
 		IsSuccess: true,
 	}, nil
 }
+
+// List a users server groups
+func (TSClient *Conn) ServerGroupsByClientDbId(cldbid int) (*QueryResponse, *[]ServerGroup, error) {
+	var groups []ServerGroup
+
+	res, body, err := TSClient.Exec("servergroupsbyclientid cldbid=%v", cldbid)
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to get %v's server groups \n%v\n%v", cldbid, res, err)
+		return res, nil, err
+	}
+
+	lines := strings.Split(body, "|")
+	for _, line := range lines {
+		parts := strings.Split(line, " ")
+
+		sgid, err := strconv.ParseInt(GetVal(parts[1]), 10, 64)
+		if err != nil {
+			Log(Error, "Failed to parse the server group id \n%v\n%v", res, err)
+			return res, nil, err
+		}
+
+		groups = append(groups, ServerGroup{
+			Id:   sgid,
+			Name: Decode(GetVal(parts[0])),
+			Type: 1,
+		})
+	}
+
+	return res, &groups, nil
+}
+
+// Creates a server group
+func (TSClient *Conn) ServerGroupAdd(name string) (*QueryResponse, int, error) {
+	var sgid int
+
+	res, body, err := TSClient.Exec("servergroupadd name=%v", Encode(name))
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to create a server group with the name %v \n%v\n%v", name, res, err)
+		return res, -1, err
+	}
+
+	sgid, err = strconv.Atoi(GetVal(body))
+	if err != nil {
+		Log(Error, "Failed to parse a server group ID")
+		return res, -1, err
+	}
+
+	return res, sgid, nil
+}
