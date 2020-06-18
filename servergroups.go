@@ -195,19 +195,57 @@ func (TSClient *Conn) ServerGroupsByClientDbId(cldbid int) (*QueryResponse, *[]S
 
 // Creates a server group
 func (TSClient *Conn) ServerGroupAdd(name string) (*QueryResponse, int, error) {
-	var sgid int
-
 	res, body, err := TSClient.Exec("servergroupadd name=%v", Encode(name))
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to create a server group with the name %v \n%v\n%v", name, res, err)
 		return res, -1, err
 	}
 
-	sgid, err = strconv.Atoi(GetVal(body))
+	sgid, err := strconv.Atoi(GetVal(body))
 	if err != nil {
 		Log(Error, "Failed to parse a server group ID")
 		return res, -1, err
 	}
 
 	return res, sgid, nil
+}
+
+// Create a duplicate of the server group {ssgid}. The new group will be named {newName}
+func (TSClient *Conn) ServerGroupCopy(ssgid int, newName string) (*QueryResponse, int, error) {
+	// Duplicate the server group
+	res, body, err := TSClient.Exec("servergroupcopy ssgid=%v tsgid=0 name=%v type=%v", ssgid, Encode(newName), RegularGroup)
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to copy servergroup %v \n%v\n%v", ssgid, res, err)
+		return res, -1, err
+	}
+
+	// Get the new server group ID
+	newSGID, err := strconv.Atoi(GetVal(body))
+	if err != nil {
+		Log(Error, "Failed to parse the new server group ID")
+		return res, -1, err
+	}
+
+	return res, newSGID, nil
+}
+
+// Delete a server group, set force delete to true to delete a group.
+// with members
+func (TSClient *Conn) ServerGroupDel(sgid int, forceDelete bool) (*QueryResponse, error) {
+	var force int
+	switch forceDelete {
+	case true:
+		force = 1
+	case false:
+		force = 0
+	}
+
+	// Attempt to delete the server group
+	res, _, err := TSClient.Exec("servergroupdel sgid=%v force=%v", sgid, force)
+	if err != nil || !res.IsSuccess {
+		Log(Error, "Failed to delete the server group %v sgod \n%v\n%v", res, err)
+		return res, err
+	}
+
+	return res, nil
 }
