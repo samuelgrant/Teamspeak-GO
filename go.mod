@@ -1,4 +1,4 @@
-module ts3
+module github.com/samuelgrant/Teamspeak-GO
 
 go 1.14
 
