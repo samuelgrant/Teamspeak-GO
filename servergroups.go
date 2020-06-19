@@ -64,7 +64,7 @@ func (TSClient *Conn) ServerGroups() (*QueryResponse, *[]ServerGroup, error) {
 }
 
 // Add a client to a server group
-func (TSClient *Conn) ServerGroupAddClient(sgid int, cldbid int) (*QueryResponse, error) {
+func (TSClient *Conn) ServerGroupAddClient(sgid int64, cldbid int64) (*QueryResponse, error) {
 	res, _, err := TSClient.Exec("servergroupaddclient sgid=%v cldbid=%v", sgid, cldbid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to add user %v to server group %v \n%v \n%v", cldbid, sgid, res, err)
@@ -75,7 +75,7 @@ func (TSClient *Conn) ServerGroupAddClient(sgid int, cldbid int) (*QueryResponse
 }
 
 // Remove a client from a server group
-func (TSClient *Conn) ServerGroupRemoveClient(sgid int, cldbid int) (*QueryResponse, error) {
+func (TSClient *Conn) ServerGroupRemoveClient(sgid int64, cldbid int64) (*QueryResponse, error) {
 	res, _, err := TSClient.Exec("servergroupdelclient sgid=%v cldbid=%v", sgid, cldbid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to remove user %v from server group %v \n%v \n%v", cldbid, sgid, res, err)
@@ -86,7 +86,7 @@ func (TSClient *Conn) ServerGroupRemoveClient(sgid int, cldbid int) (*QueryRespo
 }
 
 //List the users who belong to a specific server group
-func (TSClient *Conn) ServerGroupMembers(gid int) (*QueryResponse, *[]User, error) {
+func (TSClient *Conn) ServerGroupMembers(gid int64) (*QueryResponse, *[]User, error) {
 	users := []User{}
 
 	// Get the list of server group clients from TS
@@ -130,7 +130,7 @@ func (TSClient *Conn) ServerGroupMembers(gid int) (*QueryResponse, *[]User, erro
 }
 
 // Pokes all active clients belonging to databaseusers in a specific server group
-func (TSClient *Conn) ServerGroupPoke(sgid int, msg string) (*QueryResponse, error) {
+func (TSClient *Conn) ServerGroupPoke(sgid int64, msg string) (*QueryResponse, error) {
 	// Get a list of users who belong to the specified GID (group)
 	res, body, err := TSClient.ServerGroupMembers(sgid)
 	if err != nil || !res.IsSuccess {
@@ -143,7 +143,7 @@ func (TSClient *Conn) ServerGroupPoke(sgid int, msg string) (*QueryResponse, err
 
 	for _, user := range *body {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			res, err := TSClient.UserPoke(int(user.ActiveSessionIds[i]), msg)
+			res, err := TSClient.UserPoke(user.ActiveSessionIds[i], msg)
 			if err != nil {
 				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
 			}
@@ -164,7 +164,7 @@ func (TSClient *Conn) ServerGroupPoke(sgid int, msg string) (*QueryResponse, err
 }
 
 // List a users server groups
-func (TSClient *Conn) ServerGroupsByClientDbId(cldbid int) (*QueryResponse, *[]ServerGroup, error) {
+func (TSClient *Conn) ServerGroupsByClientDbId(cldbid int64) (*QueryResponse, *[]ServerGroup, error) {
 	var groups []ServerGroup
 
 	res, body, err := TSClient.Exec("servergroupsbyclientid cldbid=%v", cldbid)
@@ -194,14 +194,14 @@ func (TSClient *Conn) ServerGroupsByClientDbId(cldbid int) (*QueryResponse, *[]S
 }
 
 // Creates a server group
-func (TSClient *Conn) ServerGroupAdd(name string) (*QueryResponse, int, error) {
+func (TSClient *Conn) ServerGroupAdd(name string) (*QueryResponse, int64, error) {
 	res, body, err := TSClient.Exec("servergroupadd name=%v", Encode(name))
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to create a server group with the name %v \n%v\n%v", name, res, err)
 		return res, -1, err
 	}
 
-	sgid, err := strconv.Atoi(GetVal(body))
+	sgid, err := strconv.ParseInt(GetVal(body), 10, 64)
 	if err != nil {
 		Log(Error, "Failed to parse a server group ID")
 		return res, -1, err
@@ -211,7 +211,7 @@ func (TSClient *Conn) ServerGroupAdd(name string) (*QueryResponse, int, error) {
 }
 
 // Create a duplicate of the server group {ssgid}. The new group will be named {newName}
-func (TSClient *Conn) ServerGroupCopy(ssgid int, newName string) (*QueryResponse, int, error) {
+func (TSClient *Conn) ServerGroupCopy(ssgid int64, newName string) (*QueryResponse, int64, error) {
 	// Duplicate the server group
 	res, body, err := TSClient.Exec("servergroupcopy ssgid=%v tsgid=0 name=%v type=%v", ssgid, Encode(newName), RegularGroup)
 	if err != nil || !res.IsSuccess {
@@ -220,7 +220,7 @@ func (TSClient *Conn) ServerGroupCopy(ssgid int, newName string) (*QueryResponse
 	}
 
 	// Get the new server group ID
-	newSGID, err := strconv.Atoi(GetVal(body))
+	newSGID, err := strconv.ParseInt(GetVal(body), 10, 64)
 	if err != nil {
 		Log(Error, "Failed to parse the new server group ID")
 		return res, -1, err
@@ -231,8 +231,8 @@ func (TSClient *Conn) ServerGroupCopy(ssgid int, newName string) (*QueryResponse
 
 // Delete a server group, set force delete to true to delete a group.
 // with members
-func (TSClient *Conn) ServerGroupDel(sgid int, forceDelete bool) (*QueryResponse, error) {
-	var force int
+func (TSClient *Conn) ServerGroupDel(sgid int64, forceDelete bool) (*QueryResponse, error) {
+	var force int64
 	switch forceDelete {
 	case true:
 		force = 1

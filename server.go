@@ -18,7 +18,7 @@ type VirtualServer struct {
 }
 
 // Select a virtual server to manage
-func (this *Conn) Use(sid int) (*QueryResponse, error) {
+func (this *Conn) Use(sid int64) (*QueryResponse, error) {
 	res, _, err := this.Exec("use %v", sid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to select virtual server %v.\n%v \n%v", sid, res, err)
@@ -40,7 +40,7 @@ func (this *Conn) GlobalMessage(msg string) (*QueryResponse, error) {
 }
 
 // Start a virtual server
-func (this *Conn) Start(sid int) (*QueryResponse, error) {
+func (this *Conn) Start(sid int64) (*QueryResponse, error) {
 	res, _, err := this.Exec("serverstart sid=%v", sid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to start virtual server %v.\n%v \n%v", sid, res, err)
@@ -51,7 +51,7 @@ func (this *Conn) Start(sid int) (*QueryResponse, error) {
 }
 
 // Stop a virtual server
-func (this *Conn) Stop(sid int) (*QueryResponse, error) {
+func (this *Conn) Stop(sid int64) (*QueryResponse, error) {
 	res, _, err := this.Exec("serverstop sid=%v", sid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to stop virtual server %v.\n%v \n%v", sid, res, err)

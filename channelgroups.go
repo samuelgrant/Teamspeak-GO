@@ -54,7 +54,7 @@ func (TSClient *Conn) ChannelGroups() (*QueryResponse, *[]ChannelGroup, error) {
 }
 
 // Add a client to a specific channel group for a given channel
-func (TSClient *Conn) SetChannelGroup(cgid int, cid int, cldbid int) (*QueryResponse, error) {
+func (TSClient *Conn) SetChannelGroup(cgid int64, cid int64, cldbid int64) (*QueryResponse, error) {
 	res, _, err := TSClient.Exec("setclientchannelgroup cgid=%v cid=%v cldbid=%v", cgid, cid, cldbid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Unable to update client channel group {clientDbId: %v, channelId: %v, channelGroupId: %v}. \n%v \n%v", cldbid, cid, cgid, res, err)
@@ -66,7 +66,7 @@ func (TSClient *Conn) SetChannelGroup(cgid int, cid int, cldbid int) (*QueryResp
 
 // Set a user back to the default channel group. The default channel group is a group that:
 // a) has the name "guest" && b) is a RegularGroup type
-func (TSClient *Conn) ResetChannelGroup(cid int, cldbid int) (*QueryResponse, error) {
+func (TSClient *Conn) ResetChannelGroup(cid int64, cldbid int64) (*QueryResponse, error) {
 	res, groups, err := TSClient.ChannelGroups()
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to get avaliable channel groups \n%v \n%v", res, err)
@@ -82,7 +82,7 @@ func (TSClient *Conn) ResetChannelGroup(cid int, cldbid int) (*QueryResponse, er
 	}
 
 	// Set the channel group
-	res, err = TSClient.SetChannelGroup(int(cgid), cid, cldbid)
+	res, err = TSClient.SetChannelGroup(cgid, cid, cldbid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to reset the users channel group \n%v \n%v", res, err)
 		return res, err
@@ -92,7 +92,7 @@ func (TSClient *Conn) ResetChannelGroup(cid int, cldbid int) (*QueryResponse, er
 }
 
 // Return the members of a specific channel group for a given channel
-func (TSClient *Conn) ChannelGroupMembers(cgid int, cid int) (*QueryResponse, []User, error) {
+func (TSClient *Conn) ChannelGroupMembers(cgid int64, cid int64) (*QueryResponse, []User, error) {
 	users := []User{}
 
 	// Get a list of channel group members for a given channel
@@ -138,7 +138,7 @@ func (TSClient *Conn) ChannelGroupMembers(cgid int, cid int) (*QueryResponse, []
 }
 
 // Poke all clients who belong to a given channel group in a specific channel
-func (TSClient *Conn) ChannelGroupPoke(cgid int, cid int, msg string) (*QueryResponse, error) {
+func (TSClient *Conn) ChannelGroupPoke(cgid int64, cid int64, msg string) (*QueryResponse, error) {
 	res, body, err := TSClient.ChannelGroupMembers(cgid, cid)
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Failed to get channel group members \n%v \n%v", res, err)
@@ -150,7 +150,7 @@ func (TSClient *Conn) ChannelGroupPoke(cgid int, cid int, msg string) (*QueryRes
 
 	for _, user := range body {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			res, err := TSClient.UserPoke(int(user.ActiveSessionIds[i]), msg)
+			res, err := TSClient.UserPoke(user.ActiveSessionIds[i], msg)
 			if err != nil {
 				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
 			}

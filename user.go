@@ -108,14 +108,14 @@ func (TSClient *Conn) UserFindByCustomSearch(ident string, value string) (*Query
 }
 
 // Poke a client with a message
-func (TSClient *Conn) UserPoke(clid int, msg string) (*QueryResponse, error) {
+func (TSClient *Conn) UserPoke(clid int64, msg string) (*QueryResponse, error) {
 	res, _, err := TSClient.Exec("clientpoke clid=%v msg=%v", clid, Encode(msg))
 	return res, err
 }
 
 // Delete a user from the user database. This will revoke all of their permissions
 // and can be used to clear a users custom fields
-func (TSClient *Conn) UserDelete(cldbid int) (*QueryResponse, error) {
+func (TSClient *Conn) UserDelete(cldbid int64) (*QueryResponse, error) {
 	// Kick the users clients from the server
 	res, err := TSClient.UserKickClients(cldbid, "Your access has been revoked; did you reset your Team Speak access?")
 	if err != nil || !res.IsSuccess {
@@ -134,7 +134,7 @@ func (TSClient *Conn) UserDelete(cldbid int) (*QueryResponse, error) {
 }
 
 // Kick a users clients from the server
-func (TSClient *Conn) UserKickClients(cldbid int, msg string) (*QueryResponse, error) {
+func (TSClient *Conn) UserKickClients(cldbid int64, msg string) (*QueryResponse, error) {
 	res, sessions, err := TSClient.ActiveClients()
 	if err != nil || !res.IsSuccess {
 		Log(Error, "Unable to get active clients from the server \n%v\n%v", res, err)
@@ -146,7 +146,7 @@ func (TSClient *Conn) UserKickClients(cldbid int, msg string) (*QueryResponse, e
 	var counter int = 0
 
 	// Kick all active sessions belonging to the user (client database id)
-	for _, clid := range sessions[int64(cldbid)] {
+	for _, clid := range sessions[cldbid] {
 		res, _, err := TSClient.Exec("clientkick clid=%v reasonid=%v reasonmsg=%v", clid, 5, msg)
 		if err != nil || !res.IsSuccess {
 			Log(Error, "Unable to kick %v client session id (CLID) \n%v\n%v", cldbid, clid, res, err)
