@@ -2,7 +2,6 @@ package ts3
 
 import (
 	"encoding/json"
-	"log"
 )
 
 type VirtualServer struct {
@@ -68,7 +67,6 @@ func ServersList() (*status, []VirtualServer, error) {
 
 	var servers []VirtualServer
 	json.Unmarshal([]byte(body), &servers)
-	log.Fatal(servers)
 
-	return nil, nil, nil
+	return qres, servers, err
 }
