@@ -22,6 +22,10 @@ var (
 		"\v", `\v`,
 	)
 
+	webEncoder = strings.NewReplacer(
+		` `, `+`,
+	)
+
 	// decoder performs white space and special character decoding
 	// as required by the ServerQuery protocol.
 	decoder = strings.NewReplacer(
@@ -54,6 +58,10 @@ func Encode(s string) string {
 	return encoder.Replace(s)
 }
 
+func WebEncode(s string) string {
+	return webEncoder.Replace(s)
+}
+
 func GetVal(s string) string {
 	return strings.Split(s, "=")[1]
 }
@@ -78,4 +86,9 @@ func ParseQueryResponse(res string) (*QueryResponse, string, error) {
 	}
 
 	return &qr_obj, lines[0], nil
+}
+
+// Converts int64 to a string
+func i64tostr(i int64) string {
+	return strconv.FormatInt(i, 10)
 }
