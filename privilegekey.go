@@ -43,7 +43,7 @@ func TokensAdd(sgid int64, description string, customFields map[string]string) (
 		{key: "tokentype", value: "0"},
 		{key: "tokenid1", value: i64tostr(sgid)},
 		{key: "tokenid2", value: "0"},
-		{key: "tokendescription", value: description},
+		{key: "tokendescription", value: Encode(description)},
 		{key: "tokencustomset", value: strings.TrimRight(str, "|")},
 	}
 
