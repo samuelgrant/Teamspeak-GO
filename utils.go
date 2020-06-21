@@ -9,37 +9,38 @@ var (
 	// encoder performs white space and special character encoding
 	// as required by the ServerQuery protocol.
 	encoder = strings.NewReplacer(
-		`\`, `\\`,
-		`/`, `\/`,
-		` `, `\s`,
-		`|`, `\p`,
-		"\a", `\a`,
-		"\b", `\b`,
-		"\f", `\f`,
-		"\n", `\n`,
-		"\r", `\r`,
-		"\t", `\t`,
-		"\v", `\v`,
+		` `, `+`,
+		// `/`, `\/`,
+		// ` `, `\s`,
+		// `|`, `\p`,
+		// "\a", `\a`,
+		// "\b", `\b`,
+		// "\f", `\f`,
+		// "\n", `\n`,
+		// "\r", `\r`,
+		// "\t", `\t`,
+		// "\v", `\v`,
 	)
 
 	webEncoder = strings.NewReplacer(
-		` `, `+`,
+		` `, `%20`,
+		`=`, `%3D`,
 	)
 
 	// decoder performs white space and special character decoding
 	// as required by the ServerQuery protocol.
 	decoder = strings.NewReplacer(
-		`\\`, "\\",
-		`\/`, "/",
-		`\s`, " ",
-		`\p`, "|",
-		`\a`, "\a",
-		`\b`, "\b",
-		`\f`, "\f",
-		`\n`, "\n",
-		`\r`, "\r",
-		`\t`, "\t",
-		`\v`, "\v",
+		`+`, " ",
+		// `\/`, "/",
+		// `\s`, " ",
+		// `\p`, "|",
+		// `\a`, "\a",
+		// `\b`, "\b",
+		// `\f`, "\f",
+		// `\n`, "\n",
+		// `\r`, "\r",
+		// `\t`, "\t",
+		// `\v`, "\v",
 	)
 )
 
