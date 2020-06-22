@@ -123,7 +123,7 @@ func UserPoke(clid int64, msg string) (*status, error) {
 func UserDelete(cldbid int64) (*status, error) {
 	// We need to kick their clients from the server before we can delete their account
 	qres, err := UserKickClients(cldbid, "Your access has been revoked; did you reset your Team Speak access?")
-	if err != nil || !qres.IsSuccess() {
+	if err != nil {
 		Log(Error, "Failed to kick all clients belonging to user (CLDBID %v) \n%v\n%v", cldbid, qres, err)
 		return qres, err
 	}
@@ -147,7 +147,6 @@ func UserKickClients(cldbid int64, msg string) (*status, error) {
 		return qres, err
 	}
 
-	attempted := 0
 	failed := 0
 
 	for _, clid := range sessions[cldbid] {
@@ -162,11 +161,9 @@ func UserKickClients(cldbid int64, msg string) (*status, error) {
 			failed++
 			Log(Error, "Failed to kick CLID %v \n%v\n%v", clid, qres1, err)
 		}
-
-		attempted++
 	}
 
 	qres.Code = -1
-	qres.Message = fmt.Sprintf("%v%% of clients successfully kicked from the server (%v failed)", ((attempted-failed)/attempted)*100, failed)
+	qres.Message = fmt.Sprintf("%v failed", failed)
 	return qres, err
 }

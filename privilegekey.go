@@ -16,7 +16,7 @@ const (
 )
 
 type PrivilegeKey struct {
-	ChannelId    int64  // `json:"virtualserver_id,string"`
+	ChannelId    int64
 	Description  string `json:"token_description,string"`
 	GroupId      int64
 	Token        string    `json:"token"`
