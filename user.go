@@ -1,166 +1,169 @@
 package ts3
 
 import (
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
 type User struct {
 	// Database ID
-	Cldbid int64
+	Cldbid int64 `json:"client_database_id,string"`
 	// Unique TS ID
-	Cluid string
+	Cluid string `json:"client_unique_identifier"`
 	// Last Connection
-	LastConnected string
-	LastIP        string
+	LastConnected string `json:"client_lastconnected"`
+	LastIP        string `json:"client_lastip"`
 
 	ActiveSessionIds []int64
-	Nickname         string
+	Nickname         string `json:"client_nickname"`
+}
+
+type Session struct {
+	Cldbid   int64  `json:"client_database_id,string"`
+	Clid     int64  `json:"clid,string"`
+	Nickname string `json:"client_nickname"`
 }
 
 // Returns a map of active sessions mapped to their database IDs
-func (TSClient *Conn) ActiveClients() (*QueryResponse, map[int64][]int64, error) {
-	clients := make(map[int64][]int64)
-
-	res, body, err := TSClient.Exec("clientlist")
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the active client list \n%v \n%v", res, err)
-		return res, clients, err
+func ActiveClients() (*status, map[int64][]int64, error) {
+	qres, body, err := get("clientlist", false)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get the active client list \n%v\n%v", qres, err)
+		return qres, nil, err
 	}
 
-	//For each user
-	users := strings.Split(body, "|")
-	for i := 0; i < len(users); i++ {
-		parts := strings.Split(users[i], " ")
+	var sessions []Session
+	json.Unmarshal([]byte(body), &sessions)
 
-		// Get the users client database id
-		cldbid, err := strconv.ParseInt(GetVal(parts[2]), 10, 64)
-		if err != nil {
-			Log(Error, "Failed to parse the Client Database ID \n%v \n%v", parts, err)
-			return res, clients, err
-		}
-
-		// Get the users client id (Active session ID)
-		clid, err := strconv.ParseInt(GetVal(parts[0]), 10, 64)
-		if err != nil {
-			Log(Error, "Failed to parse the Client ID (active session ID) \n%v \n%v", parts, err)
-			return res, clients, err
-		}
-
-		clients[cldbid] = append(clients[cldbid], clid)
+	// Map of sessions by Client DB ID
+	connections := make(map[int64][]int64)
+	for _, session := range sessions {
+		connections[session.Cldbid] = append(connections[session.Cldbid], session.Clid)
 	}
 
-	return res, clients, nil
+	return qres, connections, err
 }
 
 // Search for a user using the CLDBID and return a user object
-func (TSClient *Conn) UserFindByDbId(cldbid int64) (*User, error) {
-	res, body, err := TSClient.Exec("clientdbinfo cldbid=%v", cldbid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get cldbid=%v information \n%v \n%v", cldbid, res, err)
-		return nil, err
+func UserFindByDbId(cldbid int64) (*status, *User, error) {
+	queries := []KeyValue{
+		{key: "cldbid", value: i64tostr(cldbid)},
 	}
 
-	// Return the user object including:
-	// Database ID, Unique Client ID, Last Connected (time/ip), Nickname
-	parts := strings.Split(body, " ")
-	return &User{
-		Cldbid:        cldbid,
-		Cluid:         GetVal(parts[0]),
-		LastConnected: GetVal(parts[4]),
-		LastIP:        GetVal(parts[13]),
-		Nickname:      Decode(GetVal(parts[1])),
-	}, nil
+	qres, body, err := get("clientdbinfo", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get information for CLDBID %v \n%v\n%v", cldbid, qres, err)
+		return qres, nil, err
+	}
+
+	var user []User
+	json.Unmarshal([]byte(body), &user)
+	return qres, &user[0], err
 }
 
 // Find a user using the custom field sets that were attached to their privilege token
 // You can only search one column/ident and value at a time.
-func (TSClient *Conn) UserFindByCustomSearch(ident string, value string) (*QueryResponse, *User, error) {
-	res, body, err := TSClient.Exec("customsearch ident=%v pattern=%v",
-		// We must use underscores instead of spaces within the database
-		// as the space is used to seperate sections of the telnet statment
-		strings.ReplaceAll(ident, " ", "_"),
-		strings.ReplaceAll(value, " ", "_"),
-	)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to find user with the custom field [%v]:%v \n%v \n%v", ident, value, res, err)
-		return res, nil, err
+func UserFindByCustomSearch(ident string, pattern string) (*status, *User, error) {
+	queries := []KeyValue{
+		{key: "ident", value: strings.ReplaceAll(ident, " ", "_")},
+		{key: "pattern", value: strings.ReplaceAll(pattern, " ", "_")},
 	}
 
-	parts := strings.Split(body, " ")
-
-	// Get the client database ID
-	cldbid, err := strconv.ParseInt(GetVal(parts[0]), 10, 64)
-	if err != nil {
-		Log(Error, "Failed to parse the CLDBID from the query response body \n%v\n%v", res, err)
-		return res, nil, err
+	qres, body, err := get("customsearch", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to find user using params {ident: %v, pattern: %v} \n%v\n%v", ident, pattern, qres, err)
+		return qres, nil, err
 	}
 
-	// Look up the user using their client database ID
-	user, err := TSClient.UserFindByDbId(cldbid)
-	if err != nil {
-		Log(Error, "Failed to look up the user %v \n%v", cldbid, err)
-		return res, nil, nil
+	// For reasons that continue to baffle me
+	// teamspeak devs use the term 'cldbid' in the servergroupclientlist
+	// yet in other endpoints they use 'client_database_id'
+	// so I need to have this struct for this one edge case....
+	type cldbid_ struct {
+		Clid int64 `json:"cldbid,string"`
 	}
 
-	return res, user, nil
+	var u []cldbid_
+	json.Unmarshal([]byte(body), &u)
+	qres, user, err := UserFindByDbId(u[0].Clid)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get user information for CLDBID %v \n%v\n%v", u[0].Clid, qres, err)
+		return qres, nil, err
+	}
+
+	// Get the sssion information
+	qres, sessions, err := ActiveClients()
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get the active sessions list \n%v\n%v", qres, err)
+	}
+
+	// Attach the users sessions
+	user.ActiveSessionIds = sessions[user.Cldbid]
+	return qres, user, err
 }
 
 // Poke a client with a message
-func (TSClient *Conn) UserPoke(clid int64, msg string) (*QueryResponse, error) {
-	res, _, err := TSClient.Exec("clientpoke clid=%v msg=%v", clid, Encode(msg))
-	return res, err
+func UserPoke(clid int64, msg string) (*status, error) {
+	queries := []KeyValue{
+		{key: "clid", value: i64tostr(clid)},
+		{key: "msg", value: msg},
+	}
+
+	qres, _, err := get("clientpoke", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to poke CLID %v \n%v\n%v", clid, qres, err)
+	}
+
+	return qres, err
 }
 
 // Delete a user from the user database. This will revoke all of their permissions
 // and can be used to clear a users custom fields
-func (TSClient *Conn) UserDelete(cldbid int64) (*QueryResponse, error) {
-	// Kick the users clients from the server
-	res, err := TSClient.UserKickClients(cldbid, "Your access has been revoked; did you reset your Team Speak access?")
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to kick all clients belonging to the user %v \n%v\n%v", cldbid, res, err)
-		return res, err
+func UserDelete(cldbid int64) (*status, error) {
+	// We need to kick their clients from the server before we can delete their account
+	qres, err := UserKickClients(cldbid, "Your access has been revoked; did you reset your Team Speak access?")
+	if err != nil {
+		Log(Error, "Failed to kick all clients belonging to user (CLDBID %v) \n%v\n%v", cldbid, qres, err)
+		return qres, err
 	}
 
-	// Delete the users account
-	res, _, err = TSClient.Exec("clientdbdelete cldbid=%v", cldbid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to delete user from the TS database \n%v\n%v", res, err)
-		return res, err
+	queries := []KeyValue{
+		{key: "cldbid", value: i64tostr(cldbid)},
+	}
+	qres, _, err = get("clientdbdelete", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to delete user from the TeamSpeak database \n%v\n%v", qres, err)
 	}
 
-	return res, nil
+	return qres, err
 }
 
 // Kick a users clients from the server
-func (TSClient *Conn) UserKickClients(cldbid int64, msg string) (*QueryResponse, error) {
-	res, sessions, err := TSClient.ActiveClients()
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Unable to get active clients from the server \n%v\n%v", res, err)
-		return res, err
+func UserKickClients(cldbid int64, msg string) (*status, error) {
+	qres, sessions, err := ActiveClients()
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get the active sessions \n%v\n%v", qres, err)
+		return qres, err
 	}
 
-	msg = Encode(msg)
-	var failures int = 0
-	var counter int = 0
+	failed := 0
 
-	// Kick all active sessions belonging to the user (client database id)
 	for _, clid := range sessions[cldbid] {
-		res, _, err := TSClient.Exec("clientkick clid=%v reasonid=%v reasonmsg=%v", clid, 5, msg)
-		if err != nil || !res.IsSuccess {
-			Log(Error, "Unable to kick %v client session id (CLID) \n%v\n%v", cldbid, clid, res, err)
-			failures++
+		queries := []KeyValue{
+			{key: "clid", value: i64tostr(clid)},
+			{key: "reasonid", value: "5"},
+			{key: "reasonmsg", value: msg},
 		}
 
-		counter++
+		qres1, _, err := get("clientkick", false, queries)
+		if err != nil || !qres.IsSuccess() {
+			failed++
+			Log(Error, "Failed to kick CLID %v \n%v\n%v", clid, qres1, err)
+		}
 	}
 
-	// Return a custom Query Response
-	// -1 custom response ID (teamspeak uses positive values)
-	return &QueryResponse{
-		Id:        -1,
-		Msg:       fmt.Sprintf("Sucesfully kicked %v out of %v clients", (counter - failures), counter),
-		IsSuccess: 0 == failures,
-	}, nil
+	qres.Code = -1
+	qres.Message = fmt.Sprintf("%v failed", failed)
+	return qres, err
 }

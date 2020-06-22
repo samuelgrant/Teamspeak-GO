@@ -1,152 +1,154 @@
 package ts3
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 )
 
+type TokenType int
+
+const (
+	Server  = 0
+	Channel = 1
+)
+
 type PrivilegeKey struct {
 	ChannelId    int64
-	Description  string
+	Description  string `json:"token_description,string"`
 	GroupId      int64
-	Token        string
-	Type         string
+	Token        string    `json:"token"`
+	Type         TokenType `json:"token_type,string"`
 	CustomFields map[string]string
 }
 
 // Create a privilege key. The groupId is a server group id.
-// CustomFields can be used to create unique IDs for a user. You can search for users by these IDs later
-func (this *Conn) TokensAdd(sgid int, description string, customFields map[string]string) (*QueryResponse, *PrivilegeKey, error) {
-	s := fmt.Sprintf("tokenadd tokentype=0 tokenid1=%v tokenid2=0 tokendescription=%v", sgid, Encode(description))
-
+// CustomFields can be used to add information to a DbUser such as an ID from an external authentication provider
+// Users can be searched for using custom fields
+func TokensAdd(sgid int64, description string, customFields map[string]string) (*status, *PrivilegeKey, error) {
 	// Build custom fields
-	if len(customFields) > 0 {
-		s = fmt.Sprintf("%v tokencustomset=", s)
+	str := ""
+	for k, v := range customFields {
+		kv := fmt.Sprintf("ident=%v value=%v",
+			strings.ReplaceAll(k, " ", "_"),
+			strings.ReplaceAll(v, " ", "_"),
+		)
 
-		str := ""
-
-		for k, v := range customFields {
-			kv := fmt.Sprintf("ident=%v\\svalue=%v",
-				strings.ReplaceAll(k, " ", "_"),
-				strings.ReplaceAll(v, " ", "_"),
-			)
-
-			str = fmt.Sprintf("%v\\p%v", str, kv)
-		}
-
-		s = fmt.Sprintf("%v%v", s, strings.TrimLeft(str, "\\p"))
+		str = fmt.Sprintf("%v%v|", str, kv)
 	}
 
-	// Create token
-	res, body, err := this.Exec(s)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to create privilege token \n%v \n%v", res, err)
-		return res, nil, err
+	queries := []KeyValue{
+		{key: "tokentype", value: "0"},
+		{key: "tokenid1", value: i64tostr(sgid)},
+		{key: "tokenid2", value: "0"},
+		{key: "tokendescription", value: Encode(description)},
+		{key: "tokencustomset", value: strings.TrimRight(str, "|")},
 	}
 
-	// build token struct
-	token := PrivilegeKey{
-		Description:  description,
-		GroupId:      int64(sgid),
-		Type:         "server",
-		Token:        body,
-		CustomFields: customFields,
+	qres, body, err := get("tokenadd", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to create a new privilege token \n%v\n%v", qres, err)
+		return qres, nil, err
 	}
 
-	return res, &token, nil
+	token := []PrivilegeKey{}
+	json.Unmarshal([]byte(body), &token)
+
+	// Setup other fields
+	token[0].Description = description
+	token[0].GroupId = sgid
+	token[0].Type = Server
+	token[0].CustomFields = customFields
+
+	return qres, &token[0], err
 }
 
 // Delete a privilege key from the server
-func (this *Conn) TokensDelete(token string) (*QueryResponse, error) {
-	res, _, err := this.Exec("privilegekeydelete token=%v", token)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to delete privilege token %v \n%v \n%v", token, res, err)
-		return res, err
+func TokensDelete(token string) (*status, error) {
+	queries := []KeyValue{
+		{key: "token", value: token},
 	}
 
-	return res, nil
+	qres, _, err := get("privilegekeydelete", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to delete privilegekey %v \n%v\n%v", token, qres, err)
+	}
+
+	return qres, err
 }
 
 // List active privilege keys, include their custom field sets
-func (this *Conn) Tokenslist() (*QueryResponse, *[]PrivilegeKey, error) {
-	var Tokens []PrivilegeKey
+func TokensList() (*status, []PrivilegeKey, error) {
+	var PrivilegeKeys []PrivilegeKey
 
-	res, body, err := this.Exec("privilegekeylist")
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get privilege keys \n%v \n%v", res, err)
-		return res, nil, err
+	qres, body, err := get("privilegekeylist", false)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get a list of privilege keys (tokens) \n%v\n%v", qres, err)
+		return qres, nil, err
 	}
 
-	keys := strings.Split(body, "|")
-	for i := 0; i < len(keys); i++ {
-		token, err := parsePrivilegeKey(keys[i])
-		if err != nil {
-			Log(Error, "Failed to parse privilege keys \n%v \n%v", res, err)
-			return res, nil, err
-		}
+	// get each token as an item
+	var lines []json.RawMessage
+	json.Unmarshal([]byte(body), &lines)
 
-		Tokens = append(Tokens, token)
+	for _, line := range lines {
+		var token PrivilegeKey
+		json.Unmarshal(line, &token)
+		PrivilegeKeys = append(PrivilegeKeys, token)
 	}
 
-	return res, &Tokens, nil
+	return qres, PrivilegeKeys, err
 }
 
 // Build a privilege key struct from a string
-func parsePrivilegeKey(s string) (PrivilegeKey, error) {
-	parts := strings.Split(s, " ")
-	token := PrivilegeKey{}
-
-	token.Token = GetVal(parts[0])
-
-	if len(parts) > 1 {
-		if GetVal(parts[1]) == "0" {
-			token.Type = "server"
-
-			groupId, err := strconv.ParseInt(GetVal(parts[2]), 10, 64)
-			if err != nil {
-				return PrivilegeKey{}, err
-			}
-			token.GroupId = groupId
-			token.ChannelId = 0
-		} else {
-			token.Type = "channel"
-
-			channelId, err := strconv.ParseInt(GetVal(parts[2]), 10, 64)
-			if err != nil {
-				return PrivilegeKey{}, nil
-			}
-			token.ChannelId = channelId
-
-			groupId, err := strconv.ParseInt(GetVal(parts[3]), 10, 64)
-			if err != nil {
-				return PrivilegeKey{}, nil
-			}
-			token.GroupId = groupId
-		}
-
-		token.Description = Decode(GetVal(parts[5]))
-		token.CustomFields = parseCustomSets(parts[6])
+func (p *PrivilegeKey) UnmarshalJSON(data []byte) error {
+	// We need to Unmarshal the JSON string into a map
+	// we will hold the map data in 'v' so we can access it
+	var v map[string]string
+	if err := json.Unmarshal(data, &v); err != nil {
+		log.Fatal(err)
+		return err
 	}
 
-	return token, nil
-}
+	p.Token = v["token"]
 
-// Build a map of custom sets for the token from a string
-func parseCustomSets(s string) map[string]string {
-	CustomSets := make(map[string]string)
-
-	s = strings.ReplaceAll(s, "token_customset", "")
-
-	parts := strings.Split(s, "\\p")
-	if len(parts) == 1 || parts[0] == "" {
-		return CustomSets
+	// Escape this function if we only need to grab the token
+	// this occurs on the AddTokens function
+	if len(v) <= 1 {
+		return nil
 	}
 
-	for i := 0; i < len(parts); i++ {
-		p := strings.Split(parts[i], "\\s")
-		CustomSets[strings.ReplaceAll(GetVal(p[0]), "_", " ")] = strings.ReplaceAll(GetVal(p[1]), "_", " ")
+	// Get the tokens as int64s
+	tokenId1, err := strconv.ParseInt(v["token_id1"], 10, 64)
+	tokenId2, err := strconv.ParseInt(v["token_id2"], 10, 64)
+	if err != nil {
+		Log(Error, "Failed to parse privilege key %v \n%v", v["token"], err)
+		return err
 	}
 
-	return CustomSets
+	// Parse custom fields and build up the map
+	customFields := make(map[string]string)
+	customFieldSets := strings.Split(v["token_customset"], " ")
+	for _, set := range customFieldSets {
+		kvp := strings.Split(set, "=")
+
+		customFields[kvp[0]] = kvp[1]
+	}
+
+	// Build up the token
+	p.CustomFields = customFields
+	p.Description = v["token_description"]
+	if v["token_type"] == "0" {
+		p.Type = Server
+		p.GroupId = tokenId1
+		p.ChannelId = -1
+	} else {
+		p.Type = Channel
+		p.ChannelId = tokenId1
+		p.GroupId = tokenId2
+	}
+
+	return nil
 }

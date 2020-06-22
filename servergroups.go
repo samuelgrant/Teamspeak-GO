@@ -1,9 +1,8 @@
 package ts3
 
 import (
+	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 )
 
 type GroupType int
@@ -15,237 +14,198 @@ const (
 )
 
 type ServerGroup struct {
-	Id   int64
-	Name string
-	Type GroupType
-	// IconId   int
-	// SaveDb   int
-	// SortId   int
-	// NameMode string
+	Id   int64     `json:"sgid,string"`
+	Name string    `json:"name"`
+	Type GroupType `json:"type,string"`
 }
 
 // List all of the server groups on the server
-func (TSClient *Conn) ServerGroups() (*QueryResponse, *[]ServerGroup, error) {
-	var serverGroups []ServerGroup
-
-	// Get the server groups
-	res, body, err := TSClient.Exec("servergrouplist")
-	if err != nil || !res.IsSuccess {
-		return res, nil, err
+func ServerGroups() (*status, []ServerGroup, error) {
+	qres, body, err := get("servergrouplist", false)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get a list server groups")
+		return qres, nil, err
 	}
 
-	// Parse server groups into []ServerGroups
-	parts := strings.Split(body, "|")
-	for i := 0; i < len(parts); i++ {
-		seg := strings.Split(parts[i], " ")
+	var groups []ServerGroup
+	json.Unmarshal([]byte(body), &groups)
 
-		id, err := strconv.ParseInt(GetVal(seg[0]), 10, 64)
-		if err != nil {
-			Log(Error, "Failed to parse the server group ID \n%v", err)
-			return res, nil, err
-		}
-
-		// Get the group ID so we can convert it into an Enum
-		groupTypeId, err := strconv.ParseInt(GetVal(seg[2]), 10, 64)
-		if err != nil {
-			Log(Error, "Failed to parse the group type ID \n%v", err)
-			return res, nil, err
-		}
-
-		// Append the ServerGroup to the group array
-		serverGroups = append(serverGroups, ServerGroup{
-			Id:   id,
-			Name: Decode(GetVal(seg[1])),
-			Type: GroupType(groupTypeId),
-		})
-	}
-
-	return res, &serverGroups, nil
+	return qres, groups, err
 }
 
 // Add a client to a server group
-func (TSClient *Conn) ServerGroupAddClient(sgid int64, cldbid int64) (*QueryResponse, error) {
-	res, _, err := TSClient.Exec("servergroupaddclient sgid=%v cldbid=%v", sgid, cldbid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to add user %v to server group %v \n%v \n%v", cldbid, sgid, res, err)
-		return res, err
+func ServerGroupsAddClient(sgid int64, cldbid int64) (*status, error) {
+	queries := []KeyValue{
+		{key: "sgid", value: i64tostr(sgid)},
+		{key: "cldbid", value: i64tostr(cldbid)},
 	}
 
-	return res, nil
+	qres, _, err := get("servergroupaddclient", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to assign servergroup %v to clientdbid %v \n%v\n%v", sgid, cldbid, qres, err)
+	}
+
+	return qres, err
 }
 
 // Remove a client from a server group
-func (TSClient *Conn) ServerGroupRemoveClient(sgid int64, cldbid int64) (*QueryResponse, error) {
-	res, _, err := TSClient.Exec("servergroupdelclient sgid=%v cldbid=%v", sgid, cldbid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to remove user %v from server group %v \n%v \n%v", cldbid, sgid, res, err)
-		return res, err
+func ServerGroupsRevokeClient(sgid int64, cldbid int64) (*status, error) {
+	queries := []KeyValue{
+		{key: "sgid", value: i64tostr(sgid)},
+		{key: "cldbid", value: i64tostr(cldbid)},
 	}
 
-	return res, nil
+	qres, _, err := get("servergroupdelclient", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to revoke servergroup %v from cldboid %v \n%v\n%v", sgid, cldbid, qres, err)
+	}
+
+	return qres, err
 }
 
 //List the users who belong to a specific server group
-func (TSClient *Conn) ServerGroupMembers(gid int64) (*QueryResponse, *[]User, error) {
-	users := []User{}
-
-	// Get the list of server group clients from TS
-	// This list returns a CLDBID, this isn't of huge use so we need to look up more info
-	res, body, err := TSClient.Exec(fmt.Sprintf("servergroupclientlist sgid=%v", gid))
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the server group client list \n%v \n%v", res, err)
-		return res, nil, err
+func ServerGroupMembers(sgid int64) (*status, []User, error) {
+	queries := []KeyValue{
+		{key: "sgid", value: i64tostr(sgid)},
 	}
 
-	// Map of active clients using their DatabseID as the map key
-	res, sessions, err := TSClient.ActiveClients()
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the list of active clients \n%v \n%v", res, err)
-		return res, nil, err
+	qres, body, err := get("servergroupclientlist", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get servergroup %v members \n%v\n%v", sgid, qres, err)
+		return qres, nil, err
 	}
 
-	parts := strings.Split(body, "|")
-	for i := 0; i < len(parts); i++ {
-		cldbid, err := strconv.ParseInt(strings.ReplaceAll(parts[i], "cldbid=", ""), 10, 64)
+	// For reasons that continue to baffle me
+	// teamspeak devs use the term 'cldbid' in the servergroupclientlist
+	// yet in other endpoints they use 'client_database_id'
+	// so I need to have this struct for this one edge case....
+	type cldbid_ struct {
+		Clid int64 `json:"cldbid,string"`
+	}
+
+	var cldbid []cldbid_
+	json.Unmarshal([]byte(body), &cldbid)
+
+	qres1, sessions, err := ActiveClients()
+	if err != nil {
+		return qres1, nil, err
+	}
+
+	// Build an array of Users with their active session IDs (CLIDs) included
+	groupmembers := []User{}
+	for _, member := range cldbid {
+		_, u, err := UserFindByDbId(member.Clid)
 		if err != nil {
-			Log(Error, "Error parsing the CLDBID \n%v \n%v", res, err)
-			return res, nil, err
+			Log(Error, "Failed to look up cldbid %v \n%v", member.Clid, err)
+			continue
 		}
 
-		// Get the user information using their Client DB ID
-		user, err := TSClient.UserFindByDbId(cldbid)
-		if err != nil {
-			Log(Error, "Error finding the user by their cldbid \n%v \n%v", res, err)
-			return res, nil, err
-		}
+		u.ActiveSessionIds = sessions[member.Clid]
 
-		// Assign the CLID (active client IDs) for the users active sessions
-		user.ActiveSessionIds = sessions[user.Cldbid]
-
-		// Add user object to result array
-		users = append(users, *user)
+		groupmembers = append(groupmembers, *u)
 	}
 
-	return res, &users, nil
+	return qres, groupmembers, err
 }
 
-// Pokes all active clients belonging to databaseusers in a specific server group
-func (TSClient *Conn) ServerGroupPoke(sgid int64, msg string) (*QueryResponse, error) {
-	// Get a list of users who belong to the specified GID (group)
-	res, body, err := TSClient.ServerGroupMembers(sgid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Error getting a list of server group members \n%v \n%v", res, err)
-		return res, err
+// // Pokes all active clients belonging to databaseusers in a specific server group
+func ServerGroupPoke(sgid int64, msg string) (*status, error) {
+	qres, users, err := ServerGroupMembers(sgid)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get server group members")
+		return qres, err
 	}
 
-	var successful int = 0
-	var attempted int = 0
+	attempted := 0
+	failed := 0
 
-	for _, user := range *body {
+	for _, user := range users {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			res, err := TSClient.UserPoke(user.ActiveSessionIds[i], msg)
-			if err != nil {
-				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
+			qres1, err := UserPoke(user.ActiveSessionIds[i], msg)
+			if err != nil || !qres1.IsSuccess() {
+				failed++
+				Log(Error, "Failed to poke %v \n%v\n%v", user.Nickname, qres1, err)
 			}
 
-			// Increase counters
 			attempted++
-			if res.IsSuccess {
-				successful++
-			}
 		}
 	}
 
-	return &QueryResponse{
-		Id:        -1,
-		Msg:       fmt.Sprintf("%v out of %v clients sucesffuly poked", successful, attempted),
-		IsSuccess: true,
-	}, nil
+	qres.Code = -1
+	qres.Message = fmt.Sprintf("%v%% of clients successfully poked (%v failed)", ((attempted-failed)/attempted)*100, failed)
+	return qres, err
 }
 
 // List a users server groups
-func (TSClient *Conn) ServerGroupsByClientDbId(cldbid int64) (*QueryResponse, *[]ServerGroup, error) {
+func ServerGroupsByClientDbId(cldbid int64) (*status, []ServerGroup, error) {
+	queries := []KeyValue{
+		{key: "cldbid", value: i64tostr(cldbid)},
+	}
+
+	qres, body, err := get("servergroupsbyclientid", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get a list of cldbid %v servergroups \n%v\n%v", cldbid, qres, err)
+		return qres, nil, err
+	}
+
 	var groups []ServerGroup
-
-	res, body, err := TSClient.Exec("servergroupsbyclientid cldbid=%v", cldbid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get %v's server groups \n%v\n%v", cldbid, res, err)
-		return res, nil, err
-	}
-
-	lines := strings.Split(body, "|")
-	for _, line := range lines {
-		parts := strings.Split(line, " ")
-
-		sgid, err := strconv.ParseInt(GetVal(parts[1]), 10, 64)
-		if err != nil {
-			Log(Error, "Failed to parse the server group id \n%v\n%v", res, err)
-			return res, nil, err
-		}
-
-		groups = append(groups, ServerGroup{
-			Id:   sgid,
-			Name: Decode(GetVal(parts[0])),
-			Type: 1,
-		})
-	}
-
-	return res, &groups, nil
+	json.Unmarshal([]byte(body), &groups)
+	return qres, groups, err
 }
 
 // Creates a server group
-func (TSClient *Conn) ServerGroupAdd(name string) (*QueryResponse, int64, error) {
-	res, body, err := TSClient.Exec("servergroupadd name=%v", Encode(name))
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to create a server group with the name %v \n%v\n%v", name, res, err)
-		return res, -1, err
+func ServerGroupAdd(name string) (*status, int64, error) {
+	queries := []KeyValue{
+		{key: "name", value: name},
 	}
 
-	sgid, err := strconv.ParseInt(GetVal(body), 10, 64)
-	if err != nil {
-		Log(Error, "Failed to parse a server group ID")
-		return res, -1, err
+	qres, body, err := get("servergroupadd", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to create a new servergroup \n%v\n%v", qres, err)
+		return qres, -1, err
 	}
 
-	return res, sgid, nil
+	var group []ServerGroup
+	json.Unmarshal([]byte(body), &group)
+	return qres, group[0].Id, err
 }
 
-// Create a duplicate of the server group {ssgid}. The new group will be named {newName}
-func (TSClient *Conn) ServerGroupCopy(ssgid int64, newName string) (*QueryResponse, int64, error) {
-	// Duplicate the server group
-	res, body, err := TSClient.Exec("servergroupcopy ssgid=%v tsgid=0 name=%v type=%v", ssgid, Encode(newName), RegularGroup)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to copy servergroup %v \n%v\n%v", ssgid, res, err)
-		return res, -1, err
+// Create a duplicate of the server group {ssgid}. The new group will be named {name}
+func ServerGroupCopy(ssgid int64, name string) (*status, int64, error) {
+	queries := []KeyValue{
+		{key: "ssgid", value: i64tostr(ssgid)},
+		{key: "tsgid", value: "0"}, // We want to make a new group
+		{key: "name", value: name},
+		{key: "type", value: i64tostr(int64(RegularGroup))},
 	}
 
-	// Get the new server group ID
-	newSGID, err := strconv.ParseInt(GetVal(body), 10, 64)
-	if err != nil {
-		Log(Error, "Failed to parse the new server group ID")
-		return res, -1, err
+	qres, body, err := get("servergroupcopy", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to copy group %v \n%v\n%v", ssgid, qres, err)
+		return qres, -1, err
 	}
 
-	return res, newSGID, nil
+	var group []ServerGroup
+	json.Unmarshal([]byte(body), &group)
+	return qres, group[0].Id, err
 }
 
-// Delete a server group, set force delete to true to delete a group.
-// with members
-func (TSClient *Conn) ServerGroupDel(sgid int64, forceDelete bool) (*QueryResponse, error) {
-	var force int64
-	switch forceDelete {
-	case true:
+// Delete a server group, forceDelete deletes a group with members
+func ServerGroupDel(sgid int64, forceDelete bool) (*status, error) {
+	var force int64 = 0
+	if forceDelete {
 		force = 1
-	case false:
-		force = 0
 	}
 
-	// Attempt to delete the server group
-	res, _, err := TSClient.Exec("servergroupdel sgid=%v force=%v", sgid, force)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to delete the server group %v sgod \n%v\n%v", sgid, res, err)
-		return res, err
+	queries := []KeyValue{
+		{key: "sgid", value: i64tostr(sgid)},
+		{key: "force", value: i64tostr(force)},
 	}
 
-	return res, nil
+	qres, _, err := get("servergroupdel", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to delete servergroup %v \n%v\n%v", sgid, qres, err)
+	}
+
+	return qres, err
 }

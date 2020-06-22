@@ -1,171 +1,135 @@
 package ts3
 
 import (
+	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 )
 
 type ChannelGroup struct {
-	Id   int64
-	Name string
-	Type GroupType // found in servergroup.go
-	// IconId   int
-	// SaveDb   int
-	// SortId   int
-	// NameMode int
+	Id   int64     `json:"cgid,string"`
+	Name string    `json:"name"`
+	Type GroupType `json:"type,string"` // found in servergroup.go
 }
 
 // Get a list of channel groups on the server
-func (TSClient *Conn) ChannelGroups() (*QueryResponse, *[]ChannelGroup, error) {
-	var channelGroups []ChannelGroup
-
-	res, body, err := TSClient.Exec("channelgrouplist")
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get channel groups from TS server \n%v \n%v", res, err)
-		return res, nil, err
+func ChannelGroups() (*status, []ChannelGroup, error) {
+	qres, body, err := get("channelgrouplist", false)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get a list of channelgroups \n%v\n%v", qres, err)
+		return qres, nil, err
 	}
 
-	groups := strings.Split(body, "|")
-	for i := 0; i < len(groups); i++ {
-		seg := strings.Split(groups[i], " ")
-
-		// Get the channel group ID
-		cgid, err := strconv.ParseInt(GetVal(seg[0]), 10, 64)
-		if err != nil {
-			Log(Error, "Failed to parse the Group ID \n%v", err)
-			return nil, nil, err
-		}
-
-		// Get the Group Type ID so we can convert it to an enum later
-		groupTypeId, err := strconv.ParseInt(GetVal(seg[2]), 10, 64)
-		if err != nil {
-			Log(Error, "Failed to parse the Group Type \n%v", err)
-		}
-
-		channelGroups = append(channelGroups, ChannelGroup{
-			Id:   cgid,
-			Type: GroupType(groupTypeId),
-			Name: Decode(GetVal(seg[1])),
-		})
-	}
-
-	return res, &channelGroups, nil
+	var groups []ChannelGroup
+	json.Unmarshal([]byte(body), &groups)
+	return qres, groups, err
 }
 
 // Add a client to a specific channel group for a given channel
-func (TSClient *Conn) SetChannelGroup(cgid int64, cid int64, cldbid int64) (*QueryResponse, error) {
-	res, _, err := TSClient.Exec("setclientchannelgroup cgid=%v cid=%v cldbid=%v", cgid, cid, cldbid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Unable to update client channel group {clientDbId: %v, channelId: %v, channelGroupId: %v}. \n%v \n%v", cldbid, cid, cgid, res, err)
-		return res, err
+func SetChannelGroup(cgid int64, cid int64, cldbid int64) (*status, error) {
+	queries := []KeyValue{
+		{key: "cgid", value: i64tostr(cgid)},
+		{key: "cid", value: i64tostr(cid)},
+		{key: "cldbid", value: i64tostr(cldbid)},
 	}
 
-	return res, nil
+	qres, _, err := get("setclientchannelgroup", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Unable to update client channel group {cldbid: %v, cid: %v, cgid: %v} \n%v\n%v", cldbid, cid, cgid, qres, err)
+	}
+
+	return qres, err
 }
 
 // Set a user back to the default channel group. The default channel group is a group that:
 // a) has the name "guest" && b) is a RegularGroup type
-func (TSClient *Conn) ResetChannelGroup(cid int64, cldbid int64) (*QueryResponse, error) {
-	res, groups, err := TSClient.ChannelGroups()
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get avaliable channel groups \n%v \n%v", res, err)
-		return res, err
+func ResetChannelGroup(cid int64, cldbid int64) (*status, error) {
+	qres, groups, err := ChannelGroups()
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get avaliable channel groups \n%v\n%v", qres, err)
+		return qres, err
 	}
 
-	// Find the group ID of the guest channel group
 	var cgid int64
-	for _, group := range *groups {
+	for _, group := range groups {
 		if group.Name == "Guest" && group.Type == RegularGroup {
 			cgid = group.Id
+			break
 		}
 	}
 
-	// Set the channel group
-	res, err = TSClient.SetChannelGroup(cgid, cid, cldbid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to reset the users channel group \n%v \n%v", res, err)
-		return res, err
-	}
-
-	return res, nil
+	return SetChannelGroup(cgid, cid, cldbid)
 }
 
 // Return the members of a specific channel group for a given channel
-func (TSClient *Conn) ChannelGroupMembers(cgid int64, cid int64) (*QueryResponse, []User, error) {
-	users := []User{}
-
-	// Get a list of channel group members for a given channel
-	res, body, err := TSClient.Exec("channelgroupclientlist cid=%v cgid=%v", cid, cgid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the list of channel group members {cid: %v, cgid: %v} \n%v \n%v", cid, cgid, res, err)
-		return res, nil, err
+func ChannelGroupMembers(cgid int64, cid int64) (*status, []User, error) {
+	queries := []KeyValue{
+		{key: "cid", value: i64tostr(cid)},
+		{key: "cgid", value: i64tostr(cgid)},
 	}
 
-	// Map of active clients using their DatabaseID as the map key
-	res, sessions, err := TSClient.ActiveClients()
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the list of active clients \n%v \n%v", res, err)
-		return res, nil, err
+	qres, body, err := get("channelgroupclientlist", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get channelgroup members \n%v\n%v", qres, err)
+		return qres, nil, err
 	}
 
-	clients := strings.Split(body, "|")
-	for i := 0; i < len(clients); i++ {
-		parts := strings.Split(clients[i], " ")
+	// For reasons that continue to baffle me
+	// teamspeak devs use the term 'cldbid' in the servergroupclientlist
+	// yet in other endpoints they use 'client_database_id'
+	// so I need to have this struct for this one edge case....
+	type cldbid_ struct {
+		Clid int64 `json:"cldbid,string"`
+	}
 
-		// Parse the client database id
-		cldbid, err := strconv.ParseInt(GetVal(parts[1]), 10, 64)
+	var cldbid []cldbid_
+	json.Unmarshal([]byte(body), &cldbid)
+
+	qres1, sessions, err := ActiveClients()
+	if err != nil {
+		return qres1, nil, err
+	}
+
+	// Build an array of Users with their active session IDs (CLIDs) included
+	groupmembers := []User{}
+	for _, member := range cldbid {
+		_, u, err := UserFindByDbId(member.Clid)
 		if err != nil {
-			Log(Error, "Failed to parse the client database ID \n%v", err)
-			return nil, nil, err
+			Log(Error, "Failed to look up cldbid %v \n%v", member.Clid, err)
+			continue
 		}
 
-		// Find the user using their CLDBID
-		user, err := TSClient.UserFindByDbId(cldbid)
-		if err != nil {
-			Log(Error, "Failed to find user using the cldbid %v \n%v", cldbid, err)
-			return nil, nil, err
-		}
+		u.ActiveSessionIds = sessions[member.Clid]
 
-		// Assign the CLID (active client IDs) for the users active sessions
-		user.ActiveSessionIds = sessions[user.Cldbid]
-
-		// Add user object to result array
-		users = append(users, *user)
+		groupmembers = append(groupmembers, *u)
 	}
 
-	return res, users, nil
+	return qres, groupmembers, err
 }
 
 // Poke all clients who belong to a given channel group in a specific channel
-func (TSClient *Conn) ChannelGroupPoke(cgid int64, cid int64, msg string) (*QueryResponse, error) {
-	res, body, err := TSClient.ChannelGroupMembers(cgid, cid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get channel group members \n%v \n%v", res, err)
-		return res, err
+func ChannelGroupPoke(cgid int64, cid int64, msg string) (*status, error) {
+	qres, members, err := ChannelGroupMembers(cgid, cid)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get group members")
+		return qres, err
 	}
 
-	var successful int = 0
-	var attempted int = 0
+	attempted := 0
+	failed := 0
 
-	for _, user := range body {
+	for _, user := range members {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			res, err := TSClient.UserPoke(user.ActiveSessionIds[i], msg)
+			res, err := UserPoke(user.ActiveSessionIds[i], msg)
 			if err != nil {
-				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
+				failed++
+				Log(Error, "Failed to poke %v \n%v\n%v", user.Nickname, res, qres)
 			}
 
-			// Increase counters
 			attempted++
-			if res.IsSuccess {
-				successful++
-			}
 		}
 	}
 
-	return &QueryResponse{
-		Id:        -1,
-		Msg:       fmt.Sprintf("%v out of %v clients sucesfully poked", successful, attempted),
-		IsSuccess: true,
-	}, nil
+	qres.Code = -1
+	qres.Message = fmt.Sprintf("%v%% of clients successfully poked (%v failed)", ((attempted-failed)/attempted)*100, failed)
+	return qres, err
 }

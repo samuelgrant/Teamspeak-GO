@@ -1,149 +1,72 @@
 package ts3
 
 import (
-	"strconv"
-	"strings"
+	"encoding/json"
 )
 
 type VirtualServer struct {
-	Id                 int64
-	Port               int64
-	Status             string
-	ClientsOnline      int64
-	QueryClientsOnline int64
-	MaxClients         int64
-	Uptime             int64
-	Name               string
-	Autostart          bool
-}
-
-// Select a virtual server to manage
-func (this *Conn) Use(sid int64) (*QueryResponse, error) {
-	res, _, err := this.Exec("use %v", sid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to select virtual server %v.\n%v \n%v", sid, res, err)
-		return res, err
-	}
-
-	return res, nil
+	Id            int64  `json:"virtualserver_id,string"`
+	Port          int64  `json:"virtualserver_port,string"`
+	Status        string `json:"virtualserver_status"`
+	ClientsOnline int64  `json:"virtualserver_clientsonline,string"`
+	MaxClients    int64  `json:"virtualserver_maxclients,string"`
+	Uptime        int64  `json:"virtualserver_uptime,string"`
+	Name          string `json:"virtualserver_name"`
+	Autostart     bool   `json:"virtualserver_autostart"`
 }
 
 // Send a global message to the current server
-func (this *Conn) GlobalMessage(msg string) (*QueryResponse, error) {
-	res, _, err := this.Exec("gm msg=%v", Encode(msg))
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to send a global message %v.\n%v \n%v", msg, res, err)
-		return res, err
+func ServerGlobalMessage(msg string) (*status, error) {
+	queries := []KeyValue{
+		{key: "msg", value: "Hello There"},
 	}
 
-	return res, nil
+	qres, _, err := get("gm", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to send global message \n%v\n%v", qres, err)
+	}
+
+	return qres, err
 }
 
 // Start a virtual server
-func (this *Conn) Start(sid int64) (*QueryResponse, error) {
-	res, _, err := this.Exec("serverstart sid=%v", sid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to start virtual server %v.\n%v \n%v", sid, res, err)
-		return res, err
+func ServerStart(sid int64) (*status, error) {
+	queries := []KeyValue{
+		{key: "sid", value: i64tostr(sid)},
 	}
 
-	return res, nil
+	qres, _, err := get("serverstart", true, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to start server %v \n%v\n%v", sid, qres, err)
+	}
+
+	return qres, err
 }
 
 // Stop a virtual server
-func (this *Conn) Stop(sid int64) (*QueryResponse, error) {
-	res, _, err := this.Exec("serverstop sid=%v", sid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to stop virtual server %v.\n%v \n%v", sid, res, err)
-		return res, err
+func ServerStop(sid int64) (*status, error) {
+	queries := []KeyValue{
+		{key: "sid", value: i64tostr(sid)},
 	}
 
-	return res, nil
+	qres, _, err := get("serverstop", true, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to stap server %v \n%v\n%v", sid, qres, err)
+	}
+
+	return qres, err
 }
 
 // List all virtual servers
-func (this *Conn) List() (*QueryResponse, []VirtualServer, error) {
-	var ServerList []VirtualServer
-
-	res, body, err := this.Exec("serverlist")
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get virtual servers from Team Speak. \n%v \n%v", res, err)
-		return res, ServerList, err
+func ServersList() (*status, []VirtualServer, error) {
+	qres, body, err := get("serverlist", true)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get a list of virtual servers \n%v\n%v", qres, err)
+		return qres, nil, err
 	}
 
-	servers := strings.Split(body, "|")
-	for i := 0; i < len(servers); i++ {
-		server, err := ParseVirtualServer(servers[i])
-		if err != nil {
-			Log(Error, "Failed to parse server information. \n%v \n%v", res, err)
-			return res, nil, err
-		}
+	var servers []VirtualServer
+	json.Unmarshal([]byte(body), &servers)
 
-		ServerList = append(ServerList, server)
-	}
-
-	return res, ServerList, err
-}
-
-// Parse a string into a Teamspeak Virtual Server object
-func ParseVirtualServer(s string) (VirtualServer, error) {
-
-	parts := strings.Split(strings.TrimSpace(s), " ")
-	server := VirtualServer{}
-
-	// Get the Virtual Server ID
-	Id, err := strconv.ParseInt(strings.Split(parts[0], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.Id = Id
-
-	// Get the virtual server portnumber
-	Port, err := strconv.ParseInt(strings.Split(parts[1], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.Port = Port
-
-	// Get the server status "online" || "offline"
-	server.Status = strings.Split(parts[2], "=")[1]
-	if server.Status == "offline" {
-		server.Name = strings.Split(parts[3], "=")[1]
-		server.Autostart = strings.Split(parts[4], "=")[1] == "1"
-
-		return server, nil
-	}
-
-	// Get the number of clients online
-	ClientsOnline, err := strconv.ParseInt(strings.Split(parts[3], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.ClientsOnline = ClientsOnline
-
-	// Get the number of 'Query' clients online
-	QueryClientsOnline, err := strconv.ParseInt(strings.Split(parts[4], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.QueryClientsOnline = QueryClientsOnline
-
-	// Get the number of 'Client Slots' avaliable on the virtual server
-	MaxClients, err := strconv.ParseInt(strings.Split(parts[5], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.MaxClients = MaxClients
-
-	// Get the server uptime
-	Uptime, err := strconv.ParseInt(strings.Split(parts[6], "=")[1], 10, 64)
-	if err != nil {
-		return VirtualServer{}, err
-	}
-	server.Uptime = Uptime
-
-	server.Name = strings.Split(parts[7], "=")[1]
-	server.Autostart = strings.Split(parts[4], "=")[1] == "8"
-
-	return server, nil
+	return qres, servers, err
 }
