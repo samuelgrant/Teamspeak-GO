@@ -1,7 +1,7 @@
 # A simple TS3 Server Query API in GO
 Written for the Eve Online alliance Boom & because I felt like learning GO...
 
-This library is in early development and does not provide full coverage for all Team Speak Query Commands. The full query command reference can be [found here](./docs/TeamSpeak%203%20Server%20Query%20Manual.pdf). If you want to execute a command that has not been implemented in the library, you can use the Get function (see below). Documentation for the implemented commands can be found in the wiki.
+This library is in early development and does not provide full coverage for all Team Speak Query Commands. The full query command reference can be [found here](./docs/TeamSpeak%203%20Server%20Query%20Manual.pdf). If you want to execute a command that has not been implemented in the library, you can use the Get function (see below). Documentation for the implemented commands can be found in the [wiki](https://github.com/samuelgrant/Teamspeak-GO/wiki).
 
 ## Issues and Feature requests
 While this library has been developed for a specific group, feel free to use, fork and open pull requests or open issues to report bugs or request features.
@@ -30,7 +30,7 @@ services:
 </details>
 
 ### Creating an API Key
-The WebQuery requires API calls to be sent with an authentication header `x-api-key: {api token}`. While API tokens must have one of three scopes (outlined below), this library requires the **manage** scope too function correctly. New API keys have a lifetime of 14 days, but you can override this using the `lifetime=` parameter, using `lifetime=0` will stop the API key from expiring.
+The WebQuery requires API calls to be sent with an authentication header `x-api-key: {api token}`. While API tokens must have one of three scopes (outlined below), this library requires the **manage** scope to function correctly. New API keys have a lifetime of 14 days, but you can override this using the `lifetime=` parameter, using `lifetime=0` will stop the API key from expiring.
 
 **Scopes:**
 * manage
@@ -60,13 +60,15 @@ The example below assumes your code is in the main function of main.go
   ts3.LoggingEnabled(true)
 
   // This needs to be done before you can make API calls
-  ts3.ConfigureHttp(apiKey, host+":10080")
+  ts3.ConfigureHttp(apiKey, host)
 
   // The default virtual server is 1
   // Override that at any time using the function below
   ts3.SelectVirtualServer(1)
 
+  // We can discard all results of a function
   ts3.ServerGlobalMessage("Global text message sent to the server")
+  // or we can grab the results of a function and handle errors/results
   qres, servers, err := ts3.ServersList()
   if err != nil || !qres.IsSuccess() {
     // handle error
