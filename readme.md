@@ -1,7 +1,7 @@
 # A simple TS3 Server Query API in GO
 Written for the Eve Online alliance Boom & because I felt like learning GO...
 
-This library is in early development and does not provide full coverage for all Team Speak Query Commands. The full query command reference can be [found here](./docs/TeamSpeak%203%20Server%20Query%20Manual.pdf). ~~If you want to execute a command that has not been implemented in the library, you can use the Exec function (see below). Documentation for the implemented commands can be found in the wiki.~~
+This library is in early development and does not provide full coverage for all Team Speak Query Commands. The full query command reference can be [found here](./docs/TeamSpeak%203%20Server%20Query%20Manual.pdf). If you want to execute a command that has not been implemented in the library, you can use the Get function (see below). Documentation for the implemented commands can be found in the wiki.
 
 ## Issues and Feature requests
 While this library has been developed for a specific group, feel free to use, fork and open pull requests or open issues to report bugs or request features.
