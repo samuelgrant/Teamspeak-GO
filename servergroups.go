@@ -3,8 +3,6 @@ package ts3
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 )
 
 type GroupType int
@@ -66,81 +64,76 @@ func ServerGroupsRevokeClient(sgid int64, cldbid int64) (*status, error) {
 }
 
 //List the users who belong to a specific server group
-func (TSClient *Conn) ServerGroupMembers(gid int64) (*QueryResponse, *[]User, error) {
-	users := []User{}
-
-	// Get the list of server group clients from TS
-	// This list returns a CLDBID, this isn't of huge use so we need to look up more info
-	res, body, err := TSClient.Exec(fmt.Sprintf("servergroupclientlist sgid=%v", gid))
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the server group client list \n%v \n%v", res, err)
-		return res, nil, err
+func ServerGroupMembers(sgid int64) (*status, []User, error) {
+	queries := []KeyValue{
+		{key: "sgid", value: i64tostr(sgid)},
 	}
 
-	// Map of active clients using their DatabseID as the map key
-	res, sessions, err := TSClient.ActiveClients()
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Failed to get the list of active clients \n%v \n%v", res, err)
-		return res, nil, err
+	qres, body, err := get("servergroupclientlist", false, queries)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get servergroup %v members \n%v\n%v", sgid, qres, err)
+		return qres, nil, err
 	}
 
-	parts := strings.Split(body, "|")
-	for i := 0; i < len(parts); i++ {
-		cldbid, err := strconv.ParseInt(strings.ReplaceAll(parts[i], "cldbid=", ""), 10, 64)
+	// For reasons that continue to baffle me
+	// teamspeak devs use the term 'cldbid' in the servergroupclientlist
+	// yet in other endpoints they use 'client_database_id'
+	// so I need to have this struct for this one edge case....
+	type cldbid_ struct {
+		Clid int64 `json:"cldbid,string"`
+	}
+
+	var cldbid []cldbid_
+	json.Unmarshal([]byte(body), &cldbid)
+
+	qres1, sessions, err := ActiveClients()
+	if err != nil {
+		return qres1, nil, err
+	}
+
+	// Build an array of Users with their active session IDs (CLIDs) included
+	groupmembers := []User{}
+	for _, member := range cldbid {
+		_, u, err := UserFindByDbId(member.Clid)
 		if err != nil {
-			Log(Error, "Error parsing the CLDBID \n%v \n%v", res, err)
-			return res, nil, err
+			Log(Error, "Failed to look up cldbid %v \n%v", member.Clid, err)
+			continue
 		}
 
-		// Get the user information using their Client DB ID
-		user, err := TSClient.UserFindByDbId(cldbid)
-		if err != nil {
-			Log(Error, "Error finding the user by their cldbid \n%v \n%v", res, err)
-			return res, nil, err
-		}
+		u.ActiveSessionIds = sessions[member.Clid]
 
-		// Assign the CLID (active client IDs) for the users active sessions
-		user.ActiveSessionIds = sessions[user.Cldbid]
-
-		// Add user object to result array
-		users = append(users, *user)
+		groupmembers = append(groupmembers, *u)
 	}
 
-	return res, &users, nil
+	return qres, groupmembers, err
 }
 
-// Pokes all active clients belonging to databaseusers in a specific server group
-func (TSClient *Conn) ServerGroupPoke(sgid int64, msg string) (*QueryResponse, error) {
-	// Get a list of users who belong to the specified GID (group)
-	res, body, err := TSClient.ServerGroupMembers(sgid)
-	if err != nil || !res.IsSuccess {
-		Log(Error, "Error getting a list of server group members \n%v \n%v", res, err)
-		return res, err
+// // Pokes all active clients belonging to databaseusers in a specific server group
+func ServerGroupPoke(sgid int64, msg string) (*status, error) {
+	qres, users, err := ServerGroupMembers(sgid)
+	if err != nil || !qres.IsSuccess() {
+		Log(Error, "Failed to get server group members")
+		return qres, err
 	}
 
-	var successful int = 0
-	var attempted int = 0
+	attempted := 0
+	failed := 0
 
-	for _, user := range *body {
+	for _, user := range users {
 		for i := 0; i < len(user.ActiveSessionIds); i++ {
-			res, err := TSClient.UserPoke(user.ActiveSessionIds[i], msg)
-			if err != nil {
-				Log(Error, "Failed to poke %v \n%v \n%v", user.Nickname, res, err)
+			qres1, err := UserPoke(user.ActiveSessionIds[i], msg)
+			if err != nil || !qres1.IsSuccess() {
+				failed++
+				Log(Error, "Failed to poke %v \n%v\n%v", user.Nickname, qres1, err)
 			}
 
-			// Increase counters
 			attempted++
-			if res.IsSuccess {
-				successful++
-			}
 		}
 	}
 
-	return &QueryResponse{
-		Id:        -1,
-		Msg:       fmt.Sprintf("%v out of %v clients sucesffuly poked", successful, attempted),
-		IsSuccess: true,
-	}, nil
+	qres.Code = -1
+	qres.Message = fmt.Sprintf("%v%% of clients successfully poked (%v failed)", ((attempted-failed)/attempted)*100, failed)
+	return qres, err
 }
 
 // List a users server groups
