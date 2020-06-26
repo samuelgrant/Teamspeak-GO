@@ -26,7 +26,7 @@ type status struct {
 }
 
 func (s status) IsSuccess() bool {
-	return s.Message == "ok"
+	return s.Message == "ok" || s.Code == -1
 }
 
 type KeyValue struct {
@@ -35,9 +35,14 @@ type KeyValue struct {
 }
 
 // Adjust the HTTP Settings
-func ConfigureHttp(apiKey, baseUrl string) {
+func ConfigureHttp(apiKey, baseUrl string, useHttps bool) {
 	api_ = apiKey
 	baseUrl_ = baseUrl
+	if useHttps {
+		scheme_ = "https"
+	} else {
+		scheme_ = "http"
+	}
 	Log(Notice, "HTTP Config set")
 }
 
