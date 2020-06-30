@@ -18,7 +18,7 @@ type VirtualServer struct {
 // Send a global message to the current server
 func ServerGlobalMessage(msg string) (*status, error) {
 	queries := []KeyValue{
-		{key: "msg", value: "Hello There"},
+		{key: "msg", value: msg},
 	}
 
 	qres, _, err := get("gm", false, queries)
